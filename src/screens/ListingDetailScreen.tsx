@@ -45,22 +45,14 @@ export default function ListingDetailScreen({ route, navigation }: any) {
       return;
     }
 
-    // Formatear mensaje predefinido
     const mensaje = `Hola ${vendedorNombre}, vi tu anuncio "${item.titulo}" en UNSA Market. ¿Sigue disponible?`;
-    const url = `whatsapp://send?phone=51${vendedorPhone}&text=${encodeURIComponent(mensaje)}`;
+    // Usamos wa.me que es el formato universal de WhatsApp
+    const url = `https://wa.me/51${vendedorPhone}?text=${encodeURIComponent(mensaje)}`;
 
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (!supported) {
-          Alert.alert(
-            "Error",
-            "No tienes WhatsApp instalado en este dispositivo.",
-          );
-        } else {
-          return Linking.openURL(url);
-        }
-      })
-      .catch((err) => console.error("Error al abrir WhatsApp", err));
+    Linking.openURL(url).catch((err) => {
+      Alert.alert("Error", "No se pudo abrir WhatsApp. Verifica tu conexión.");
+      console.error(err);
+    });
   };
 
   return (

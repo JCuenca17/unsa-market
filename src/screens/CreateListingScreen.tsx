@@ -11,9 +11,14 @@ import {
   ScrollView,
   Keyboard,
   TouchableWithoutFeedback,
+  Image,
 } from "react-native";
 import { collection, addDoc } from "firebase/firestore";
-import { db, auth } from "../services/firebaseConfig";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import * as ImagePicker from "expo-image-picker";
+import { db, auth, storage } from "../services/firebaseConfig";
+
+const CATEGORIAS = ["Libros", "Tecnología", "Alimentos", "Tutorías", "Otros"];
 
 export default function CreateListingScreen({ navigation }: any) {
   const [titulo, setTitulo] = useState("");
@@ -21,26 +26,51 @@ export default function CreateListingScreen({ navigation }: any) {
   const [precio, setPrecio] = useState("");
   const [tipo, setTipo] = useState<"producto" | "servicio">("producto");
   const [categoria, setCategoria] = useState("");
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const CATEGORIAS = ["Libros", "Tecnología", "Alimentos", "Tutorías", "Otros"];
+
+  // Función para abrir la galería
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5, // Comprimimos la imagen para que suba más rápido
+    });
+
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
 
   const handlePublish = async () => {
     if (!titulo || !precio || !categoria) {
-      Alert.alert(
-        "Error",
-        "Por favor completa los campos obligatorios (Título, Precio y Categoría).",
-      );
+      Alert.alert("Error", "Por favor completa los campos obligatorios.");
       return;
     }
 
     const currentUser = auth.currentUser;
-    if (!currentUser) {
-      Alert.alert("Error", "Debes iniciar sesión para publicar.");
-      return;
-    }
+    if (!currentUser) return;
 
     setLoading(true);
     try {
+      let downloadUrl = "";
+
+      // Si el usuario seleccionó una imagen, la subimos a Firebase Storage primero
+      if (imageUri) {
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+
+        // Creamos una ruta única para la imagen
+        const imageRef = ref(
+          storage,
+          `listings/${currentUser.uid}_${Date.now()}.jpg`,
+        );
+        await uploadBytes(imageRef, blob);
+        downloadUrl = await getDownloadURL(imageRef);
+      }
+
+      // Guardamos los datos en Firestore (con o sin imagen)
       await addDoc(collection(db, "listings"), {
         vendedor_id: currentUser.uid,
         titulo: titulo.trim(),
@@ -49,21 +79,23 @@ export default function CreateListingScreen({ navigation }: any) {
         tipo: tipo,
         categoria: categoria.trim(),
         estado: "activo",
+        imagen_url: downloadUrl, // Guardamos el link de la foto
         interesados: [],
         fecha_creacion: new Date().toISOString(),
       });
 
       Alert.alert("Éxito", "Tu anuncio ha sido publicado.");
-      // Limpiar el formulario
+
+      // Limpiamos todo
       setTitulo("");
       setDescripcion("");
       setPrecio("");
       setCategoria("");
-
-      // Redirigir al inicio para ver el anuncio
+      setImageUri(null);
       navigation.navigate("Inicio");
     } catch (error: any) {
       Alert.alert("Error al publicar", error.message);
+      console.log(error);
     } finally {
       setLoading(false);
     }
@@ -74,6 +106,18 @@ export default function CreateListingScreen({ navigation }: any) {
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.headerTitle}>Crear Nuevo Anuncio</Text>
 
+        <TouchableOpacity
+          style={styles.imagePickerContainer}
+          onPress={pickImage}
+        >
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.imagePreview} />
+          ) : (
+            <Text style={styles.imagePickerText}>+ Añadir foto del {tipo}</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* --- El resto del formulario se mantiene igual --- */}
         <View style={styles.typeContainer}>
           <TouchableOpacity
             style={[
@@ -114,7 +158,7 @@ export default function CreateListingScreen({ navigation }: any) {
           style={styles.input}
           value={titulo}
           onChangeText={setTitulo}
-          placeholder="Ej. Calculadora Científica Casio"
+          placeholder="Ej. Calculadora"
         />
 
         <Text style={styles.label}>Categoría *</Text>
@@ -154,7 +198,7 @@ export default function CreateListingScreen({ navigation }: any) {
           style={[styles.input, styles.textArea]}
           value={descripcion}
           onChangeText={setDescripcion}
-          placeholder="Detalla el estado, horarios, etc."
+          placeholder="Detalles extra..."
           multiline
           numberOfLines={4}
         />
@@ -184,6 +228,20 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: "center",
   },
+  imagePickerContainer: {
+    height: 150,
+    backgroundColor: "#e1e4e8",
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderStyle: "dashed",
+  },
+  imagePreview: { width: "100%", height: "100%" },
+  imagePickerText: { color: "#666", fontWeight: "bold", fontSize: 16 },
   typeContainer: { flexDirection: "row", marginBottom: 20 },
   typeButton: {
     flex: 1,
@@ -205,14 +263,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   textArea: { height: 100, textAlignVertical: "top" },
-  submitButton: {
-    backgroundColor: "#5A0028",
-    padding: 15,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   categoryGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 15 },
   categoryChip: {
     backgroundColor: "#eee",
@@ -225,4 +275,12 @@ const styles = StyleSheet.create({
   categoryChipActive: { backgroundColor: "#5A0028" },
   categoryChipText: { color: "#666", fontSize: 13 },
   categoryChipTextActive: { color: "#fff", fontWeight: "bold" },
+  submitButton: {
+    backgroundColor: "#5A0028",
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
 });
