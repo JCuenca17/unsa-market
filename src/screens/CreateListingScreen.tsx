@@ -22,6 +22,7 @@ export default function CreateListingScreen({ navigation }: any) {
   const [tipo, setTipo] = useState<"producto" | "servicio">("producto");
   const [categoria, setCategoria] = useState("");
   const [loading, setLoading] = useState(false);
+  const CATEGORIAS = ["Libros", "Tecnología", "Alimentos", "Tutorías", "Otros"];
 
   const handlePublish = async () => {
     if (!titulo || !precio || !categoria) {
@@ -117,12 +118,27 @@ export default function CreateListingScreen({ navigation }: any) {
         />
 
         <Text style={styles.label}>Categoría *</Text>
-        <TextInput
-          style={styles.input}
-          value={categoria}
-          onChangeText={setCategoria}
-          placeholder="Ej. Tecnología, Tutoría, Alimentos"
-        />
+        <View style={styles.categoryGrid}>
+          {CATEGORIAS.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={[
+                styles.categoryChip,
+                categoria === cat && styles.categoryChipActive,
+              ]}
+              onPress={() => setCategoria(cat)}
+            >
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  categoria === cat && styles.categoryChipTextActive,
+                ]}
+              >
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         <Text style={styles.label}>Precio (S/) *</Text>
         <TextInput
@@ -197,4 +213,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 15 },
+  categoryChip: {
+    backgroundColor: "#eee",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  categoryChipActive: { backgroundColor: "#5A0028" },
+  categoryChipText: { color: "#666", fontSize: 13 },
+  categoryChipTextActive: { color: "#fff", fontWeight: "bold" },
 });

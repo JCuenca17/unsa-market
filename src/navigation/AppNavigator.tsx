@@ -5,11 +5,12 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { View, Text, ActivityIndicator } from "react-native";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "../services/firebaseConfig";
+
 import LoginScreen from "../screens/LoginScreen";
 import HomeScreen from "../screens/HomeScreen";
 import CreateListingScreen from "../screens/CreateListingScreen";
 
-// Pantallas temporales del menú
+// Pantalla temporal del perfil
 const ProfileScreen = () => (
   <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
     <Text>Mi Perfil</Text>
@@ -23,7 +24,6 @@ export default function AppNavigator() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Listener de Firebase que detecta si el usuario está logueado o no
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -41,11 +41,10 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      {/* Si hay usuario muestra el menú, si no, muestra el Login */}
       {user ? (
         <Tab.Navigator screenOptions={{ tabBarActiveTintColor: "#5A0028" }}>
           <Tab.Screen name="Inicio" component={HomeScreen} />
-          <Tab.Screen name="Publicar" component={CreateListingScreen} />{" "}
+          <Tab.Screen name="Publicar" component={CreateListingScreen} />
           <Tab.Screen name="Mi Perfil" component={ProfileScreen} />
         </Tab.Navigator>
       ) : (
