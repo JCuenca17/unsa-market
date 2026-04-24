@@ -7,6 +7,7 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "../services/firebaseConfig";
 import LoginScreen from "../screens/LoginScreen";
 import HomeScreen from "../screens/HomeScreen";
+import CreateListingScreen from "../screens/CreateListingScreen";
 
 // Pantallas temporales del menú
 const ProfileScreen = () => (
@@ -44,6 +45,7 @@ export default function AppNavigator() {
       {user ? (
         <Tab.Navigator screenOptions={{ tabBarActiveTintColor: "#5A0028" }}>
           <Tab.Screen name="Inicio" component={HomeScreen} />
+          <Tab.Screen name="Publicar" component={CreateListingScreen} />{" "}
           <Tab.Screen name="Mi Perfil" component={ProfileScreen} />
         </Tab.Navigator>
       ) : (
