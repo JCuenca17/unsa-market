@@ -11,12 +11,7 @@ import LoginScreen from "../screens/LoginScreen";
 import HomeScreen from "../screens/HomeScreen";
 import CreateListingScreen from "../screens/CreateListingScreen";
 import ListingDetailScreen from "../screens/ListingDetailScreen";
-
-const ProfileScreen = () => (
-  <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-    <Text>Mi Panel de Emprendedor</Text>
-  </View>
-);
+import ProfileScreen from "../screens/ProfileScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();

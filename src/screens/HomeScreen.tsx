@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
+  Image,
 } from "react-native";
 import {
   collection,
@@ -23,64 +24,59 @@ interface Listing {
   precio: number;
   tipo: string;
   categoria: string;
+  imagen_url?: string; // Habilitamos el espacio para la imagen
 }
 
-export default function HomeScreen(navigation: any) {
+export default function HomeScreen({ navigation }: any) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Definimos la consulta: Activos y ordenados por fecha
     const q = query(
       collection(db, "listings"),
       where("estado", "==", "activo"),
       orderBy("fecha_creacion", "desc"),
     );
 
-    // onSnapshot escucha cambios en tiempo real
-    const unsubscribe = onSnapshot(
-      q,
-      (querySnapshot) => {
-        const fetchedListings: Listing[] = [];
-        querySnapshot.forEach((doc) => {
-          fetchedListings.push({ id: doc.id, ...doc.data() } as Listing);
-        });
-        setListings(fetchedListings);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error en tiempo real:", error);
-        setLoading(false);
-      },
-    );
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const fetchedListings: Listing[] = [];
+      querySnapshot.forEach((doc) => {
+        fetchedListings.push({ id: doc.id, ...doc.data() } as Listing);
+      });
+      setListings(fetchedListings);
+      setLoading(false);
+    });
 
-    // Limpiar el listener cuando el usuario sale de la pantalla
     return () => unsubscribe();
   }, []);
 
-  const renderItem = ({ item }: { item: Listing }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => navigation.navigate("ListingDetail", { item })}
-      activeOpacity={0.7}
-    >
-      <View style={styles.cardHeader}>
-        <Text
-          style={[
-            styles.badge,
-            {
-              backgroundColor: item.tipo === "producto" ? "#E3F2FD" : "#F3E5F5",
-            },
-          ]}
-        >
-          {item.tipo.toUpperCase()}
-        </Text>
-        <Text style={styles.category}>{item.categoria}</Text>
-      </View>
-      <Text style={styles.title}>{item.titulo}</Text>
-      <Text style={styles.price}>S/ {item.precio.toFixed(2)}</Text>
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }: { item: Listing }) => {
+    // Imagen por defecto temporal para que el UI se vea como un marketplace real
+    const defaultImage =
+      item.tipo === "producto"
+        ? "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80" // Audífonos (Tecnología)
+        : "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&q=80"; // Estudiantes estudiando (Servicio)
+
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => navigation.navigate("ListingDetail", { item })}
+        activeOpacity={0.9}
+      >
+        <Image
+          source={{ uri: item.imagen_url || defaultImage }}
+          style={styles.cardImage}
+        />
+        <View style={styles.cardContent}>
+          <Text style={styles.price}>S/ {item.precio.toFixed(2)}</Text>
+          <Text style={styles.title} numberOfLines={2}>
+            {item.titulo}
+          </Text>
+          <Text style={styles.category}>{item.categoria}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -93,6 +89,8 @@ export default function HomeScreen(navigation: any) {
           data={listings}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
+          numColumns={2} // ¡El truco mágico para el grid!
+          columnWrapperStyle={styles.row} // Estilo para separar las columnas
           contentContainerStyle={styles.listContainer}
           ListEmptyComponent={
             <Text style={styles.emptyText}>
@@ -106,36 +104,33 @@ export default function HomeScreen(navigation: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f5f5f5" },
+  container: { flex: 1, backgroundColor: "#f0f2f5" }, // Gris más claro de fondo
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  listContainer: { padding: 15 },
+  listContainer: { padding: 10 },
+  row: { justifyContent: "space-between" }, // Separa equitativamente las dos tarjetas
   card: {
+    flex: 1,
     backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 12,
+    borderRadius: 8,
     marginBottom: 15,
-    elevation: 3,
+    marginHorizontal: 5,
+    overflow: "hidden",
+    elevation: 2,
     shadowColor: "#000",
     shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowRadius: 3,
+    maxWidth: "48%", // Asegura que quepan exactamente 2 por fila
   },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
+  cardImage: { width: "100%", height: 140, backgroundColor: "#e1e4e8" },
+  cardContent: { padding: 10 },
+  price: { fontSize: 18, color: "#333", fontWeight: "bold", marginBottom: 4 },
+  title: { fontSize: 13, color: "#555", marginBottom: 6, height: 35 },
+  category: {
+    color: "#888",
+    fontSize: 11,
+    fontWeight: "500",
+    textTransform: "uppercase",
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    fontSize: 10,
-    fontWeight: "bold",
-    color: "#333",
-    overflow: "hidden",
-  },
-  category: { color: "#888", fontSize: 12, fontWeight: "600" },
-  title: { fontSize: 18, fontWeight: "bold", color: "#333", marginBottom: 4 },
-  price: { fontSize: 16, color: "#5A0028", fontWeight: "bold" },
   emptyText: {
     textAlign: "center",
     marginTop: 50,
