@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { View, Text, ActivityIndicator } from "react-native";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "../services/firebaseConfig";
@@ -9,15 +10,27 @@ import { auth } from "../services/firebaseConfig";
 import LoginScreen from "../screens/LoginScreen";
 import HomeScreen from "../screens/HomeScreen";
 import CreateListingScreen from "../screens/CreateListingScreen";
+import ListingDetailScreen from "../screens/ListingDetailScreen";
 
-// Pantalla temporal del perfil
 const ProfileScreen = () => (
   <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-    <Text>Mi Perfil</Text>
+    <Text>Mi Panel de Emprendedor</Text>
   </View>
 );
 
 const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
+
+// Las pestañas inferiores se agrupan en su propio componente
+function MainTabs() {
+  return (
+    <Tab.Navigator screenOptions={{ tabBarActiveTintColor: "#5A0028" }}>
+      <Tab.Screen name="Inicio" component={HomeScreen} />
+      <Tab.Screen name="Publicar" component={CreateListingScreen} />
+      <Tab.Screen name="Mi Perfil" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+}
 
 export default function AppNavigator() {
   const [user, setUser] = useState<User | null>(null);
@@ -42,11 +55,19 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       {user ? (
-        <Tab.Navigator screenOptions={{ tabBarActiveTintColor: "#5A0028" }}>
-          <Tab.Screen name="Inicio" component={HomeScreen} />
-          <Tab.Screen name="Publicar" component={CreateListingScreen} />
-          <Tab.Screen name="Mi Perfil" component={ProfileScreen} />
-        </Tab.Navigator>
+        // Usamos el Stack Navigator como contenedor principal cuando hay sesión
+        <Stack.Navigator>
+          <Stack.Screen
+            name="MainTabs"
+            component={MainTabs}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="ListingDetail"
+            component={ListingDetailScreen}
+            options={{ title: "Detalles del Anuncio" }}
+          />
+        </Stack.Navigator>
       ) : (
         <LoginScreen />
       )}

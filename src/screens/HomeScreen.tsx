@@ -6,6 +6,7 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import {
   collection,
@@ -24,7 +25,7 @@ interface Listing {
   categoria: string;
 }
 
-export default function HomeScreen() {
+export default function HomeScreen(navigation: any) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -58,7 +59,11 @@ export default function HomeScreen() {
   }, []);
 
   const renderItem = ({ item }: { item: Listing }) => (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => navigation.navigate("ListingDetail", { item })}
+      activeOpacity={0.7}
+    >
       <View style={styles.cardHeader}>
         <Text
           style={[
@@ -74,7 +79,7 @@ export default function HomeScreen() {
       </View>
       <Text style={styles.title}>{item.titulo}</Text>
       <Text style={styles.price}>S/ {item.precio.toFixed(2)}</Text>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
