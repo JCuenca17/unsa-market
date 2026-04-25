@@ -16,6 +16,7 @@ import MyListingsScreen from "../screens/MyListingsScreen";
 import EditListingScreen from "../screens/EditListingScreen";
 import EditProfileScreen from "../screens/EditProfileScreen";
 import CreateListingScreen from "../screens/CreateListingScreen"; // <-- Importación añadida
+import ReviewScreen from "../screens/ReviewScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -85,6 +86,11 @@ export default function AppNavigator() {
             name="Publicar"
             component={CreateListingScreen}
             options={{ title: "Nuevo Anuncio" }}
+          />
+          <Stack.Screen
+            name="Calificar"
+            component={ReviewScreen}
+            options={{ title: "Calificar Vendedor" }}
           />
         </Stack.Navigator>
       ) : (
