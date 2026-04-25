@@ -20,17 +20,14 @@ export default function ProfileScreen({ navigation }: any) {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // useFocusEffect recarga los datos cada vez que entras a esta pestaña (ideal por si cambiaste tu foto)
   useFocusEffect(
     useCallback(() => {
       const fetchUserData = async () => {
         try {
           const docSnap = await getDoc(doc(db, "users", auth.currentUser!.uid));
-          if (docSnap.exists()) {
-            setUserData(docSnap.data());
-          }
-        } catch (error) {
-          console.error("Error cargando perfil:", error);
+          if (docSnap.exists()) setUserData(docSnap.data());
+        } catch (e) {
+          console.log(e);
         } finally {
           setLoading(false);
         }
@@ -42,117 +39,72 @@ export default function ProfileScreen({ navigation }: any) {
   if (loading)
     return (
       <View style={{ flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator color={COLORS.primary} />
       </View>
     );
 
   return (
-    <ScrollView style={{ backgroundColor: "#fff" }}>
-      <View style={localStyles.header}>
-        {userData?.photoURL ? (
-          <Image
-            source={{ uri: userData.photoURL }}
-            style={localStyles.avatar}
-          />
-        ) : (
-          <View
-            style={[
-              localStyles.avatar,
-              {
-                backgroundColor: "#eee",
-                justifyContent: "center",
-                alignItems: "center",
-              },
-            ]}
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        {/* BOTÓN DE EDICIÓN FLOTANTE SOBRE LA FOTO */}
+        <View style={styles.avatarWrapper}>
+          {userData?.photoURL ? (
+            <Image source={{ uri: userData.photoURL }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Ionicons name="person" size={50} color={COLORS.textLight} />
+            </View>
+          )}
+          <TouchableOpacity
+            style={styles.editIconBadge}
+            onPress={() => navigation.navigate("EditProfile")}
           >
-            <Ionicons name="person" size={50} color="#ccc" />
-          </View>
-        )}
-        <Text style={localStyles.name}>{userData?.nombre}</Text>
-        <Text style={localStyles.sub}>{userData?.email}</Text>
-        <Text style={localStyles.faculty}>{userData?.facultad}</Text>
+            <Ionicons name="pencil" size={16} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.name}>{userData?.nombre}</Text>
+        <Text style={styles.faculty}>{userData?.facultad}</Text>
       </View>
 
-      <View style={localStyles.statsContainer}>
-        <View style={localStyles.statBox}>
-          <Text style={localStyles.statNumber}>
-            ⭐ {userData?.rating_promedio?.toFixed(1) || "0.0"}
+      <View style={styles.statsBar}>
+        <View style={styles.statBox}>
+          <Text style={styles.statVal}>
+            {userData?.rating_promedio?.toFixed(1) || "0.0"}
           </Text>
-          <Text style={localStyles.statLabel}>Reputación</Text>
+          <Text style={styles.statLabel}>Reputación</Text>
         </View>
-        <View style={localStyles.statBox}>
-          <Text style={localStyles.statNumber}>
-            {userData?.total_ventas || 0}
-          </Text>
-          <Text style={localStyles.statLabel}>Ventas</Text>
+        <View style={styles.statBox}>
+          <Text style={styles.statVal}>{userData?.total_ventas || 0}</Text>
+          <Text style={styles.statLabel}>Ventas</Text>
         </View>
       </View>
 
-      <View style={{ padding: SPACING.xl }}>
-        {/* BOTÓN PARA CAMBIAR FOTO Y DATOS */}
+      <View style={styles.menu}>
         <TouchableOpacity
-          style={[
-            globalStyles.primaryButton,
-            {
-              marginBottom: 15,
-              flexDirection: "row",
-              justifyContent: "center",
-            },
-          ]}
-          onPress={() => navigation.navigate("EditProfile")}
-        >
-          <Ionicons
-            name="pencil"
-            size={20}
-            color="#fff"
-            style={{ marginRight: 10 }}
-          />
-          <Text style={globalStyles.primaryButtonText}>
-            Editar Perfil y Foto
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            globalStyles.primaryButton,
-            { backgroundColor: COLORS.secondary, marginBottom: 15 },
-          ]}
+          style={styles.menuItem}
           onPress={() => navigation.navigate("MisAnuncios")}
         >
-          <Text style={globalStyles.primaryButtonText}>Mis Ventas Activas</Text>
+          <Ionicons name="pricetags-outline" size={22} color={COLORS.primary} />
+          <Text style={styles.menuText}>Gestionar mis publicaciones</Text>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[
-            globalStyles.primaryButton,
-            { backgroundColor: COLORS.secondary, marginBottom: 30 },
-          ]}
+          style={styles.menuItem}
           onPress={() => navigation.navigate("MisCompras")}
         >
-          <Text style={globalStyles.primaryButtonText}>
-            Mis Compras (Recibos)
-          </Text>
+          <Ionicons name="receipt-outline" size={22} color={COLORS.primary} />
+          <Text style={styles.menuText}>Historial de compras</Text>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
         </TouchableOpacity>
 
-        {/* BOTÓN DE CERRAR SESIÓN */}
         <TouchableOpacity
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 15,
-          }}
+          style={[styles.menuItem, { marginTop: 30 }]}
           onPress={() => signOut(auth)}
         >
-          <Ionicons
-            name="log-out-outline"
-            size={24}
-            color={COLORS.danger}
-            style={{ marginRight: 10 }}
-          />
-          <Text
-            style={{ color: COLORS.danger, fontWeight: "bold", fontSize: 16 }}
-          >
+          <Ionicons name="log-out-outline" size={22} color={COLORS.danger} />
+          <Text style={[styles.menuText, { color: COLORS.danger }]}>
             Cerrar Sesión
           </Text>
         </TouchableOpacity>
@@ -161,30 +113,67 @@ export default function ProfileScreen({ navigation }: any) {
   );
 }
 
-const localStyles = StyleSheet.create({
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#fff" },
   header: {
     alignItems: "center",
     paddingVertical: 40,
-    backgroundColor: "#f9f9f9",
-    borderBottomWidth: 1,
-    borderColor: "#eee",
+    backgroundColor: "#fcfcfc",
   },
-  avatar: { width: 120, height: 120, borderRadius: 60, marginBottom: 15 },
-  name: { fontSize: 24, fontWeight: "bold", color: COLORS.text },
-  sub: { fontSize: 14, color: COLORS.textMuted, marginBottom: 5 },
-  faculty: { fontSize: 14, color: COLORS.primary, fontWeight: "600" },
-  statsContainer: {
+  avatarWrapper: { position: "relative" },
+  avatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: COLORS.primary,
+  },
+  avatarPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#eee",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editIconBadge: {
+    position: "absolute",
+    bottom: 5,
+    right: 5,
+    backgroundColor: COLORS.primary,
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  name: { fontSize: 24, fontWeight: "bold", color: COLORS.text, marginTop: 15 },
+  faculty: { fontSize: 14, color: COLORS.textMuted, marginTop: 4 },
+  statsBar: {
     flexDirection: "row",
-    paddingVertical: 20,
+    borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: "#eee",
+    borderColor: "#f0f0f0",
+    paddingVertical: 20,
   },
   statBox: {
     flex: 1,
     alignItems: "center",
     borderRightWidth: 1,
-    borderColor: "#eee",
+    borderColor: "#f0f0f0",
   },
-  statNumber: { fontSize: 20, fontWeight: "bold", color: COLORS.text },
-  statLabel: { fontSize: 12, color: COLORS.textLight, marginTop: 5 },
+  statVal: { fontSize: 20, fontWeight: "bold", color: COLORS.text },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    textTransform: "uppercase",
+  },
+  menu: { padding: 20 },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f9f9f9",
+  },
+  menuText: { flex: 1, marginLeft: 15, fontSize: 16, color: COLORS.text },
 });

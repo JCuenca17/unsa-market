@@ -12,7 +12,17 @@ import {
   Image,
   Dimensions,
 } from "react-native";
-import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  getDocs,
+  orderBy,
+  limit,
+  updateDoc,
+  arrayUnion,
+} from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
@@ -22,8 +32,8 @@ const { width } = Dimensions.get("window");
 export default function ListingDetailScreen({ route, navigation }: any) {
   const { item } = route.params;
   const [vendedor, setVendedor] = useState<any>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isInterested, setIsInterested] = useState(false);
 
   const currentUser = auth.currentUser;
@@ -32,11 +42,20 @@ export default function ListingDetailScreen({ route, navigation }: any) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const docSnap = await getDoc(doc(db, "users", item.vendedor_id));
-        if (docSnap.exists()) setVendedor(docSnap.data());
+        const vSnap = await getDoc(doc(db, "users", item.vendedor_id));
+        if (vSnap.exists()) setVendedor(vSnap.data());
+
         if (item.interesados?.includes(currentUser?.uid)) setIsInterested(true);
+
+        const q = query(
+          collection(db, "users", item.vendedor_id, "reviews"),
+          orderBy("fecha", "desc"),
+          limit(3),
+        );
+        const rSnap = await getDocs(q);
+        setReviews(rSnap.docs.map((d) => d.data()));
       } catch (e) {
-        console.log(e);
+        console.log("Error al cargar:", e);
       } finally {
         setLoading(false);
       }
@@ -44,137 +63,181 @@ export default function ListingDetailScreen({ route, navigation }: any) {
     fetchData();
   }, [item]);
 
-  const handleInterest = async () => {
-    if (isOwner) return; // Doble seguridad
+  const handleWhatsApp = async () => {
+    if (isOwner) return;
+    if (!vendedor?.whatsapp) {
+      Alert.alert("Error", "El vendedor no registró su WhatsApp.");
+      return;
+    }
     try {
-      await updateDoc(doc(db, "listings", item.id), {
-        interesados: arrayUnion(currentUser?.uid),
-      });
-      setIsInterested(true);
-      Alert.alert(
-        "Interés enviado",
-        "El vendedor ya puede verte en su lista para confirmar la venta.",
-      );
-      Linking.openURL(
-        `https://wa.me/51${vendedor.whatsapp}?text=Hola, me interesa tu anuncio: ${item.titulo}`,
-      );
+      if (!isInterested) {
+        await updateDoc(doc(db, "listings", item.id), {
+          interesados: arrayUnion(currentUser?.uid),
+        });
+        setIsInterested(true);
+      }
+      const cleanNumber = vendedor.whatsapp.replace(/\D/g, "");
+      const message = `Hola ${vendedor.nombre}, vi tu anuncio "${item.titulo}" en UNSA Market y me interesa.`;
+      const url = `https://wa.me/51${cleanNumber}?text=${encodeURIComponent(message)}`;
+      const supported = await Linking.canOpenURL(url);
+      if (supported) await Linking.openURL(url);
     } catch (e) {
-      Alert.alert("Error", "No se pudo procesar.");
+      Alert.alert("Error", "No se pudo abrir WhatsApp.");
     }
   };
 
-  return (
-    <ScrollView style={globalStyles.container}>
-      {/* Galería Profesional */}
-      <View style={{ position: "relative" }}>
-        <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onScroll={(e) =>
-            setActiveImageIndex(
-              Math.round(e.nativeEvent.contentOffset.x / width),
-            )
-          }
-        >
-          {item.imagenes?.map((img: string, i: number) => (
-            <Image
-              key={i}
-              source={{ uri: img }}
-              style={{ width, height: 350, resizeMode: "cover" }}
-            />
-          ))}
-        </ScrollView>
-        <View style={localStyles.badgeContainer}>
-          <Text style={localStyles.badgeText}>
-            {activeImageIndex + 1} / {item.imagenes?.length}
-          </Text>
-        </View>
+  if (loading)
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#fff",
+        }}
+      >
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
+    );
 
-      <View style={localStyles.content}>
-        <View style={localStyles.priceRow}>
-          <Text style={localStyles.price}>S/ {item.precio.toFixed(2)}</Text>
-          {item.tipo === "producto" && (
-            <Text style={localStyles.stockText}>
-              Stock: {item.stock > 0 ? item.stock : "Agotado"}
+  return (
+    <ScrollView style={{ backgroundColor: "#fff" }}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+      >
+        {item.imagenes?.map((img: any, i: number) => (
+          <Image key={i} source={{ uri: img }} style={{ width, height: 350 }} />
+        ))}
+      </ScrollView>
+
+      <View style={styles.mainInfo}>
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>S/ {item.precio.toFixed(2)}</Text>
+          <View
+            style={[
+              styles.modalidadBadge,
+              {
+                backgroundColor:
+                  item.modalidad === "unica" ? "#fff3e0" : "#e3f2fd",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.modalidadText,
+                { color: item.modalidad === "unica" ? "#e65100" : "#1565c0" },
+              ]}
+            >
+              {item.modalidad === "unica"
+                ? "Artículo Único"
+                : "Disponibilidad Múltiple"}
             </Text>
-          )}
+          </View>
         </View>
 
-        {/* REPUTACIÓN DEL VENDEDOR (Detalle Real) */}
+        <Text style={styles.title}>{item.titulo}</Text>
+
         <TouchableOpacity
-          style={localStyles.sellerBadge}
+          style={styles.sellerRow}
           onPress={() =>
             navigation.navigate("PublicProfile", {
               vendedorId: item.vendedor_id,
             })
           }
         >
-          <View style={localStyles.avatarSmall}>
-            <Text style={{ color: "#fff", fontWeight: "bold" }}>
-              {vendedor?.nombre?.charAt(0)}
-            </Text>
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={localStyles.sellerName}>{vendedor?.nombre}</Text>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+          {vendedor?.photoURL ? (
+            <Image
+              source={{ uri: vendedor.photoURL }}
+              style={styles.sellerThumb}
+            />
+          ) : (
+            <View style={styles.sellerThumbPlaceholder}>
+              <Ionicons name="person" size={20} color="#fff" />
+            </View>
+          )}
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.sellerName}>{vendedor?.nombre}</Text>
+            <View style={styles.statsContainer}>
               <Ionicons name="star" size={14} color="#FFD700" />
-              <Text style={localStyles.ratingText}>
-                {vendedor?.rating_promedio
-                  ? vendedor.rating_promedio.toFixed(1)
-                  : "Nuevo"}{" "}
-                • {vendedor?.total_ventas || 0} ventas
+              <Text style={styles.sellerStats}>
+                {" "}
+                {vendedor?.rating_promedio?.toFixed(1) || "Nuevo"} •{" "}
+                {vendedor?.total_ventas || 0} ventas
               </Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
+          <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
         </TouchableOpacity>
 
-        <Text style={localStyles.title}>{item.titulo}</Text>
-        <View style={localStyles.divider} />
-
-        <Text style={localStyles.labelTitle}>Descripción</Text>
-        <Text style={localStyles.description}>
-          {item.descripcion || "Sin descripción."}
+        <Text style={styles.sectionTitle}>Descripción</Text>
+        <Text style={styles.description}>
+          {item.descripcion || "El vendedor no proporcionó una descripción."}
         </Text>
 
-        {/* LÓGICA DE ACCIÓN PROFESIONAL */}
+        <View style={styles.divider} />
+
+        <Text style={styles.sectionTitle}>Opiniones sobre el vendedor</Text>
+        {reviews.length > 0 ? (
+          reviews.map((r, index) => (
+            <View key={index} style={styles.reviewCard}>
+              <View style={styles.reviewHeader}>
+                <View style={styles.starsRow}>
+                  {Array.from({ length: r.rating }).map((_, i) => (
+                    <Ionicons key={i} name="star" size={14} color="#FFD700" />
+                  ))}
+                </View>
+                <Text style={styles.reviewDate}>
+                  {new Date(r.fecha).toLocaleDateString()}
+                </Text>
+              </View>
+              <Text style={styles.reviewText}>"{r.comentario}"</Text>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.noReviews}>Aún no hay reseñas.</Text>
+        )}
+
         {isOwner ? (
-          <View style={localStyles.ownerBox}>
+          <View style={styles.ownerBox}>
             <Ionicons
               name="information-circle-outline"
               size={20}
               color={COLORS.primary}
             />
-            <Text style={localStyles.ownerText}>
-              Esta es tu publicación. Puedes gestionarla desde tu perfil.
+            <Text style={styles.ownerText}>
+              Esta es tu publicación. Puedes gestionarla desde tu Perfil.
             </Text>
           </View>
         ) : item.estado === "activo" ? (
           <TouchableOpacity
             style={[
-              localStyles.mainButton,
-              isInterested && { backgroundColor: COLORS.textLight },
+              globalStyles.primaryButton,
+              { marginTop: 30, flexDirection: "row", justifyContent: "center" },
             ]}
-            onPress={handleInterest}
-            disabled={isInterested}
+            onPress={handleWhatsApp}
           >
             <Ionicons
-              name="chatbubble-outline"
+              name="logo-whatsapp"
               size={20}
               color="#fff"
               style={{ marginRight: 10 }}
             />
-            <Text style={localStyles.mainButtonText}>
-              {isInterested ? "Interés Registrado" : "Contactar Vendedor"}
+            <Text style={globalStyles.primaryButtonText}>
+              {isInterested ? "Volver a contactar" : "Contactar por WhatsApp"}
             </Text>
           </TouchableOpacity>
         ) : (
           <View
-            style={[localStyles.mainButton, { backgroundColor: COLORS.danger }]}
+            style={[
+              globalStyles.primaryButton,
+              { backgroundColor: COLORS.danger, marginTop: 30 },
+            ]}
           >
-            <Text style={localStyles.mainButtonText}>ANUNCIO AGOTADO</Text>
+            <Text style={globalStyles.primaryButtonText}>
+              ANUNCIO FINALIZADO
+            </Text>
           </View>
         )}
       </View>
@@ -182,76 +245,83 @@ export default function ListingDetailScreen({ route, navigation }: any) {
   );
 }
 
-const localStyles = StyleSheet.create({
-  content: { padding: SPACING.lg },
+const styles = StyleSheet.create({
+  mainInfo: { padding: 20 },
   priceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: 5,
   },
-  price: { fontSize: 32, fontWeight: "bold", color: COLORS.text },
-  stockText: {
-    backgroundColor: "#e8f5e9",
-    color: "#2e7d32",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 5,
+  price: { fontSize: 28, fontWeight: "bold", color: COLORS.text },
+  modalidadBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 15,
+  },
+  modalidadText: {
     fontWeight: "bold",
-    fontSize: 12,
+    fontSize: 11,
+    textTransform: "uppercase",
   },
-  sellerBadge: {
+  title: { fontSize: 20, color: COLORS.textMuted, marginBottom: 15 },
+  sellerRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.background,
-    padding: 12,
+    backgroundColor: "#f9f9f9",
+    padding: 15,
     borderRadius: 12,
-    marginBottom: 20,
+    marginVertical: 20,
   },
-  avatarSmall: {
-    width: 35,
-    height: 35,
-    borderRadius: 18,
+  sellerThumb: { width: 45, height: 45, borderRadius: 23 },
+  sellerThumbPlaceholder: {
+    width: 45,
+    height: 45,
+    borderRadius: 23,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
   },
-  sellerName: { fontWeight: "bold", color: COLORS.text, fontSize: 15 },
-  ratingText: { fontSize: 12, color: COLORS.textMuted, marginLeft: 4 },
-  title: {
-    fontSize: 22,
-    color: COLORS.text,
-    fontWeight: "500",
-    marginBottom: 15,
-  },
-  divider: { height: 1, backgroundColor: COLORS.border, marginBottom: 15 },
-  labelTitle: {
-    fontSize: 14,
-    color: COLORS.textLight,
+  sellerName: { fontWeight: "bold", fontSize: 16 },
+  statsContainer: { flexDirection: "row", alignItems: "center", marginTop: 2 },
+  sellerStats: { fontSize: 12, color: COLORS.textLight },
+  sectionTitle: {
+    fontSize: 16,
     fontWeight: "bold",
+    marginBottom: 10,
+    color: COLORS.text,
+  },
+  description: { fontSize: 15, color: COLORS.textMuted, lineHeight: 22 },
+  divider: { height: 1, backgroundColor: "#f0f0f0", marginVertical: 25 },
+  reviewCard: {
+    backgroundColor: "#fff",
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+    marginBottom: 12,
+  },
+  reviewHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 5,
   },
-  description: {
-    fontSize: 16,
-    color: COLORS.textMuted,
-    lineHeight: 24,
-    marginBottom: 30,
+  starsRow: { flexDirection: "row" },
+  reviewDate: { fontSize: 11, color: COLORS.textLight },
+  reviewText: { fontSize: 13, color: COLORS.textMuted, fontStyle: "italic" },
+  noReviews: {
+    color: COLORS.textLight,
+    fontStyle: "italic",
+    fontSize: 13,
+    marginBottom: 20,
   },
-  mainButton: {
-    backgroundColor: COLORS.secondary,
-    padding: 18,
-    borderRadius: 12,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-  },
-  mainButtonText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
   ownerBox: {
     backgroundColor: "#f0e6ea",
     padding: 15,
     borderRadius: 10,
     flexDirection: "row",
     alignItems: "center",
+    marginTop: 30,
   },
   ownerText: {
     color: COLORS.primary,
@@ -260,14 +330,4 @@ const localStyles = StyleSheet.create({
     flex: 1,
     fontWeight: "500",
   },
-  badgeContainer: {
-    position: "absolute",
-    bottom: 15,
-    right: 15,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  badgeText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
 });

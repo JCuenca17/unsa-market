@@ -19,17 +19,20 @@ import {
 } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../services/firebaseConfig";
-import { globalStyles, COLORS } from "../theme/theme";
+import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
 export default function ReviewScreen({ route, navigation }: any) {
-  const { transaction } = route.params; // RECIBE LA TRANSACCIÓN
+  const { transaction } = route.params;
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
     if (!comment.trim()) {
-      Alert.alert("Error", "Por favor escribe un comentario.");
+      Alert.alert(
+        "Reseña incompleta",
+        "Por favor escribe un comentario sobre tu experiencia.",
+      );
       return;
     }
     setLoading(true);
@@ -39,18 +42,15 @@ export default function ReviewScreen({ route, navigation }: any) {
       await addDoc(collection(db, "users", vendedorId, "reviews"), {
         listing_titulo: transaction.titulo,
         comprador_id: auth.currentUser?.uid,
-        autor_email: auth.currentUser?.email,
         rating,
         comentario: comment.trim(),
         fecha: new Date().toISOString(),
       });
 
-      // Marcar la transacción como calificada
       await updateDoc(doc(db, "transactions", transaction.id), {
         calificado: true,
       });
 
-      // Recalcular el promedio del vendedor
       const q = query(collection(db, "users", vendedorId, "reviews"));
       const snap = await getDocs(q);
       let total = 0;
@@ -61,10 +61,13 @@ export default function ReviewScreen({ route, navigation }: any) {
         total_ventas: snap.size,
       });
 
-      Alert.alert("¡Gracias!", "Tu calificación ayuda a la comunidad.");
+      Alert.alert("¡Enviado!", "Tu calificación ha sido registrada con éxito.");
       navigation.goBack();
     } catch (e) {
-      Alert.alert("Error", "No se pudo guardar la reseña.");
+      Alert.alert(
+        "Error de permisos",
+        "No se pudo guardar la reseña. Verifica las reglas de Firestore.",
+      );
     } finally {
       setLoading(false);
     }
@@ -73,16 +76,20 @@ export default function ReviewScreen({ route, navigation }: any) {
   return (
     <View style={globalStyles.containerPadding}>
       <Text style={globalStyles.title}>Calificar Vendedor</Text>
-      <Text style={localStyles.subtitle}>
-        ¿Cómo fue tu experiencia comprando "{transaction.titulo}"?
+      <Text style={styles.subtitle}>
+        ¿Cómo fue tu experiencia con "{transaction.titulo}"?
       </Text>
 
-      <View style={localStyles.starsContainer}>
+      <View style={styles.starsContainer}>
         {[1, 2, 3, 4, 5].map((s) => (
-          <TouchableOpacity key={s} onPress={() => setRating(s)}>
+          <TouchableOpacity
+            key={s}
+            onPress={() => setRating(s)}
+            style={{ marginHorizontal: 5 }}
+          >
             <Ionicons
               name={s <= rating ? "star" : "star-outline"}
-              size={45}
+              size={40}
               color="#FFD700"
             />
           </TouchableOpacity>
@@ -91,34 +98,37 @@ export default function ReviewScreen({ route, navigation }: any) {
 
       <TextInput
         style={[globalStyles.input, { height: 120, textAlignVertical: "top" }]}
-        placeholder="Escribe tu reseña..."
+        placeholder="Comparte tu experiencia con otros estudiantes..."
         multiline
         value={comment}
         onChangeText={setComment}
       />
 
       <TouchableOpacity
-        style={globalStyles.primaryButton}
+        style={[globalStyles.primaryButton, { marginTop: 20 }]}
         onPress={handleSubmit}
         disabled={loading}
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={globalStyles.primaryButtonText}>
-            Enviar Calificación
-          </Text>
+          <Text style={globalStyles.primaryButtonText}>Publicar Reseña</Text>
         )}
       </TouchableOpacity>
     </View>
   );
 }
 
-const localStyles = StyleSheet.create({
-  subtitle: { textAlign: "center", marginBottom: 30, color: COLORS.textMuted },
+const styles = StyleSheet.create({
+  subtitle: {
+    textAlign: "center",
+    marginBottom: 30,
+    color: COLORS.textMuted,
+    fontSize: 15,
+  },
   starsContainer: {
     flexDirection: "row",
     justifyContent: "center",
-    marginBottom: 30,
+    marginBottom: 40,
   },
 });

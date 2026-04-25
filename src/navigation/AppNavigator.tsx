@@ -6,29 +6,44 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { View, ActivityIndicator } from "react-native";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
+import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../services/firebaseConfig";
 import { COLORS } from "../theme/theme";
 
-// Importaciones
+// Pantallas
 import LoginScreen from "../screens/LoginScreen";
 import CompleteProfileScreen from "../screens/CompleteProfileScreen";
 import HomeScreen from "../screens/HomeScreen";
 import ListingDetailScreen from "../screens/ListingDetailScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import MyListingsScreen from "../screens/MyListingsScreen";
-import EditListingScreen from "../screens/EditListingScreen";
 import EditProfileScreen from "../screens/EditProfileScreen";
 import CreateListingScreen from "../screens/CreateListingScreen";
 import PublicProfileScreen from "../screens/PublicProfileScreen";
 import ReviewScreen from "../screens/ReviewScreen";
 import MyPurchasesScreen from "../screens/MyPurchasesScreen";
+import EditListingScreen from "../screens/EditListingScreen"; // <-- RUTA CORREGIDA
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function MainTabs() {
   return (
-    <Tab.Navigator screenOptions={{ tabBarActiveTintColor: COLORS.primary }}>
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.textLight,
+        tabBarStyle: { height: 65, paddingBottom: 10, paddingTop: 10 },
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: any;
+          if (route.name === "Inicio")
+            iconName = focused ? "home" : "home-outline";
+          else if (route.name === "Mi Perfil")
+            iconName = focused ? "person" : "person-outline";
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+      })}
+    >
       <Tab.Screen name="Inicio" component={HomeScreen} />
       <Tab.Screen name="Mi Perfil" component={ProfileScreen} />
     </Tab.Navigator>
@@ -42,12 +57,9 @@ export default function AppNavigator() {
 
   useEffect(() => {
     let unsubscribeDoc: (() => void) | undefined;
-
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-
       if (currentUser) {
-        // Inicia el vigilante solo si hay sesión
         unsubscribeDoc = onSnapshot(
           doc(db, "users", currentUser.uid),
           (docSnap) => {
@@ -58,38 +70,30 @@ export default function AppNavigator() {
           },
         );
       } else {
-        // CRÍTICO: Si se cierra la sesión (como al registrarse), apagamos el vigilante
-        if (unsubscribeDoc) {
-          unsubscribeDoc();
-        }
+        if (unsubscribeDoc) unsubscribeDoc();
         setLoading(false);
       }
     });
-
     return () => {
-      // Limpieza final cuando se destruye el componente
       unsubscribeAuth();
       if (unsubscribeDoc) unsubscribeDoc();
     };
   }, []);
 
-  if (loading) {
+  if (loading)
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <View style={{ flex: 1, justifyContent: "center" }}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
-  }
 
   return (
     <NavigationContainer>
       {!user ? (
-        // 1. NO HAY SESIÓN: Pantalla de Login con Google
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Login" component={LoginScreen} />
         </Stack.Navigator>
       ) : !isProfileComplete ? (
-        // 2. HAY SESIÓN PERO FALTAN DATOS: Obligar a completar perfil
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen
             name="CompleteProfile"
@@ -97,7 +101,6 @@ export default function AppNavigator() {
           />
         </Stack.Navigator>
       ) : (
-        // 3. TODO EN ORDEN: Acceso total al Marketplace
         <Stack.Navigator>
           <Stack.Screen
             name="MainTabs"
@@ -107,12 +110,12 @@ export default function AppNavigator() {
           <Stack.Screen
             name="ListingDetail"
             component={ListingDetailScreen}
-            options={{ title: "Detalles del Anuncio" }}
+            options={{ title: "Detalle" }}
           />
           <Stack.Screen
             name="MisAnuncios"
             component={MyListingsScreen}
-            options={{ title: "Mis Publicaciones" }}
+            options={{ title: "Mis Ventas" }}
           />
           <Stack.Screen
             name="MisCompras"
@@ -132,7 +135,7 @@ export default function AppNavigator() {
           <Stack.Screen
             name="Publicar"
             component={CreateListingScreen}
-            options={{ title: "Nuevo Anuncio" }}
+            options={{ title: "Vender" }}
           />
           <Stack.Screen
             name="PublicProfile"
@@ -142,7 +145,7 @@ export default function AppNavigator() {
           <Stack.Screen
             name="Calificar"
             component={ReviewScreen}
-            options={{ title: "Calificar Compra" }}
+            options={{ title: "Reseña" }}
           />
         </Stack.Navigator>
       )}

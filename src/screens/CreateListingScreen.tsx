@@ -14,9 +14,10 @@ import {
   FlatList,
 } from "react-native";
 import { collection, addDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
-import { db, auth } from "../services/firebaseConfig";
+import { db, auth, storage } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
 const CATEGORIAS = [
@@ -29,6 +30,7 @@ const CATEGORIAS = [
   "Otros",
 ];
 const TIPOS = ["Producto", "Servicio"];
+const MODALIDADES = ["Única vez (Un solo artículo)", "Múltiples / Continuo"];
 
 export default function CreateListingScreen({ navigation }: any) {
   const [titulo, setTitulo] = useState("");
@@ -36,41 +38,71 @@ export default function CreateListingScreen({ navigation }: any) {
   const [precio, setPrecio] = useState("");
   const [tipo, setTipo] = useState("Producto");
   const [categoria, setCategoria] = useState("");
-  const [stock, setStock] = useState("1"); // NUEVO: Stock
-  const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
+  const [modalidad, setModalidad] = useState("Única vez (Un solo artículo)");
+
+  const [imageUris, setImageUris] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [typeModalVisible, setTypeModalVisible] = useState(false);
+  const [modalidadModalVisible, setModalidadModalVisible] = useState(false);
 
   const pickImage = async () => {
-    if (imagenesBase64.length >= 5) {
-      Alert.alert("Límite alcanzado", "Máximo 5 fotos.");
+    if (imageUris.length >= 5) {
+      Alert.alert("Límite alcanzado", "Puedes subir un máximo de 5 fotos.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.2,
-      base64: true,
+      quality: 0.5,
     });
-    if (!result.canceled && result.assets[0].base64)
-      setImagenesBase64([
-        ...imagenesBase64,
-        `data:image/jpeg;base64,${result.assets[0].base64}`,
-      ]);
+
+    if (!result.canceled && result.assets[0].uri) {
+      setImageUris([...imageUris, result.assets[0].uri]);
+    }
+  };
+
+  const uploadImagesAndGetUrls = async (userId: string) => {
+    const urls = [];
+    for (let i = 0; i < imageUris.length; i++) {
+      const uri = imageUris[i];
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const filename = uri.substring(uri.lastIndexOf("/") + 1);
+      const storageRef = ref(
+        storage,
+        `listings/${userId}/${Date.now()}_${filename}`,
+      );
+      await uploadBytes(storageRef, blob);
+      const downloadUrl = await getDownloadURL(storageRef);
+      urls.push(downloadUrl);
+    }
+    return urls;
   };
 
   const handlePublish = async () => {
-    if (!titulo || !precio || !categoria || imagenesBase64.length === 0) {
-      Alert.alert("Error", "Completa campos obligatorios y sube foto.");
+    if (
+      !titulo.trim() ||
+      !precio.trim() ||
+      !categoria ||
+      imageUris.length === 0
+    ) {
+      Alert.alert(
+        "Campos incompletos",
+        "Por favor completa todos los campos obligatorios y sube al menos una foto.",
+      );
       return;
     }
+
     const currentUser = auth.currentUser;
     if (!currentUser) return;
+
     setLoading(true);
     try {
+      const uploadedImageUrls = await uploadImagesAndGetUrls(currentUser.uid);
+
       const listingData = {
         vendedor_id: currentUser.uid,
         titulo: titulo.trim(),
@@ -78,16 +110,20 @@ export default function CreateListingScreen({ navigation }: any) {
         precio: parseFloat(precio),
         tipo: tipo.toLowerCase(),
         categoria: categoria.trim(),
+        modalidad: modalidad.includes("Única") ? "unica" : "multiple",
         estado: "activo",
-        imagenes: imagenesBase64,
+        imagenes: uploadedImageUrls,
         fecha_creacion: new Date().toISOString(),
-        stock: tipo === "Producto" ? parseInt(stock) || 1 : null, // Se guarda stock solo si es producto
       };
+
       await addDoc(collection(db, "listings"), listingData);
-      Alert.alert("Éxito", "Anuncio publicado.");
+      Alert.alert("¡Éxito!", "Tu anuncio ha sido publicado en la plataforma.");
       navigation.goBack();
     } catch (error: any) {
-      Alert.alert("Error", error.message);
+      Alert.alert(
+        "Error",
+        "No se pudo publicar el anuncio. Revisa tu conexión a internet.",
+      );
     } finally {
       setLoading(false);
     }
@@ -114,11 +150,8 @@ export default function CreateListingScreen({ navigation }: any) {
     <ScrollView
       contentContainerStyle={globalStyles.containerPadding}
       keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
     >
-      <Text style={globalStyles.label}>
-        Fotos ({imagenesBase64.length}/5) *
-      </Text>
+      <Text style={globalStyles.label}>Fotos ({imageUris.length}/5) *</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -127,18 +160,18 @@ export default function CreateListingScreen({ navigation }: any) {
         <TouchableOpacity style={localStyles.addCard} onPress={pickImage}>
           <Ionicons name="camera-outline" size={30} color={COLORS.textLight} />
         </TouchableOpacity>
-        {imagenesBase64.map((uri, index) => (
+        {imageUris.map((uri, index) => (
           <View key={index} style={localStyles.imageWrapper}>
             <Image source={{ uri }} style={localStyles.thumbnail} />
             <TouchableOpacity
               style={localStyles.removeBadge}
               onPress={() => {
-                const newImages = [...imagenesBase64];
+                const newImages = [...imageUris];
                 newImages.splice(index, 1);
-                setImagenesBase64(newImages);
+                setImageUris(newImages);
               }}
             >
-              <Ionicons name="close" size={14} color={COLORS.surface} />
+              <Ionicons name="close" size={14} color="#fff" />
             </TouchableOpacity>
           </View>
         ))}
@@ -149,7 +182,7 @@ export default function CreateListingScreen({ navigation }: any) {
         style={globalStyles.input}
         value={titulo}
         onChangeText={setTitulo}
-        placeholder="Ej. Laptops, Libros..."
+        placeholder="Ej. Libro de Cálculo Larson"
       />
 
       <SelectorField
@@ -157,25 +190,15 @@ export default function CreateListingScreen({ navigation }: any) {
         value={tipo}
         onPress={() => setTypeModalVisible(true)}
       />
-
-      {/* CAMPO CONDICIONAL DE STOCK */}
-      {tipo === "Producto" && (
-        <View>
-          <Text style={globalStyles.label}>Stock Disponible *</Text>
-          <TextInput
-            style={globalStyles.input}
-            value={stock}
-            onChangeText={setStock}
-            placeholder="Ej. 1, 5, 10"
-            keyboardType="numeric"
-          />
-        </View>
-      )}
-
       <SelectorField
         label="Categoría"
         value={categoria}
         onPress={() => setCategoryModalVisible(true)}
+      />
+      <SelectorField
+        label="Modalidad de Venta"
+        value={modalidad}
+        onPress={() => setModalidadModalVisible(true)}
       />
 
       <Text style={globalStyles.label}>Precio (S/) *</Text>
@@ -192,7 +215,7 @@ export default function CreateListingScreen({ navigation }: any) {
         style={[globalStyles.input, localStyles.textArea]}
         value={descripcion}
         onChangeText={setDescripcion}
-        placeholder="Agrega detalles..."
+        placeholder="Agrega detalles como estado, entregas..."
         multiline
         numberOfLines={5}
       />
@@ -203,7 +226,7 @@ export default function CreateListingScreen({ navigation }: any) {
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator color={COLORS.surface} />
+          <ActivityIndicator color="#fff" />
         ) : (
           <Text style={globalStyles.primaryButtonText}>Publicar Anuncio</Text>
         )}
@@ -266,6 +289,35 @@ export default function CreateListingScreen({ navigation }: any) {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Modal Modalidad */}
+      <Modal
+        visible={modalidadModalVisible}
+        transparent={true}
+        animationType="fade"
+      >
+        <TouchableOpacity
+          style={localStyles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setModalidadModalVisible(false)}
+        >
+          <View style={localStyles.modalContentCenter}>
+            <Text style={localStyles.modalTitle}>¿Cómo vas a vender esto?</Text>
+            {MODALIDADES.map((m) => (
+              <TouchableOpacity
+                key={m}
+                style={localStyles.modalOption}
+                onPress={() => {
+                  setModalidad(m);
+                  setModalidadModalVisible(false);
+                }}
+              >
+                <Text style={localStyles.modalOptionText}>{m}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
@@ -275,7 +327,7 @@ const localStyles = StyleSheet.create({
   addCard: {
     width: 80,
     height: 80,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.background,
     borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
@@ -303,7 +355,7 @@ const localStyles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.background,
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: 14,
