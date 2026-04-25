@@ -10,6 +10,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../services/firebaseConfig";
 import { COLORS } from "../theme/theme";
 
+// NUEVA IMPORTACIÓN: El motor de notificaciones
+import { registerForPushNotificationsAsync } from "../services/notifications";
+
 // Pantallas
 import LoginScreen from "../screens/LoginScreen";
 import CompleteProfileScreen from "../screens/CompleteProfileScreen";
@@ -22,7 +25,7 @@ import CreateListingScreen from "../screens/CreateListingScreen";
 import PublicProfileScreen from "../screens/PublicProfileScreen";
 import ReviewScreen from "../screens/ReviewScreen";
 import MyPurchasesScreen from "../screens/MyPurchasesScreen";
-import EditListingScreen from "../screens/EditListingScreen"; // <-- RUTA CORREGIDA
+import EditListingScreen from "../screens/EditListingScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -57,9 +60,13 @@ export default function AppNavigator() {
 
   useEffect(() => {
     let unsubscribeDoc: (() => void) | undefined;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        // ACTIVACIÓN DE NOTIFICACIONES: Pedimos permiso y guardamos el token
+        registerForPushNotificationsAsync(currentUser.uid);
+
         unsubscribeDoc = onSnapshot(
           doc(db, "users", currentUser.uid),
           (docSnap) => {
@@ -74,6 +81,7 @@ export default function AppNavigator() {
         setLoading(false);
       }
     });
+
     return () => {
       unsubscribeAuth();
       if (unsubscribeDoc) unsubscribeDoc();
