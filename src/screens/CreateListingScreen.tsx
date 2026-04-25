@@ -9,14 +9,12 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
-  Keyboard,
-  TouchableWithoutFeedback,
   Image,
 } from "react-native";
 import { collection, addDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import * as ImagePicker from "expo-image-picker";
-import { db, auth, storage } from "../services/firebaseConfig";
+import { db, auth } from "../services/firebaseConfig";
+import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
 const CATEGORIAS = ["Libros", "Tecnología", "Alimentos", "Tutorías", "Otros"];
 
@@ -26,244 +24,245 @@ export default function CreateListingScreen({ navigation }: any) {
   const [precio, setPrecio] = useState("");
   const [tipo, setTipo] = useState<"producto" | "servicio">("producto");
   const [categoria, setCategoria] = useState("");
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Función para abrir la galería
   const pickImage = async () => {
+    if (imagenesBase64.length >= 5) {
+      Alert.alert("Límite alcanzado", "Máximo 5 fotos.");
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.5, // Comprimimos la imagen para que suba más rápido
+      quality: 0.2,
+      base64: true,
     });
+    if (!result.canceled && result.assets[0].base64)
+      setImagenesBase64([
+        ...imagenesBase64,
+        `data:image/jpeg;base64,${result.assets[0].base64}`,
+      ]);
+  };
 
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-    }
+  const removeImage = (index: number) => {
+    const newImages = [...imagenesBase64];
+    newImages.splice(index, 1);
+    setImagenesBase64(newImages);
   };
 
   const handlePublish = async () => {
-    if (!titulo || !precio || !categoria) {
-      Alert.alert("Error", "Por favor completa los campos obligatorios.");
+    if (!titulo || !precio || !categoria || imagenesBase64.length === 0) {
+      Alert.alert("Error", "Completa campos obligatorios y sube foto.");
       return;
     }
-
     const currentUser = auth.currentUser;
     if (!currentUser) return;
-
     setLoading(true);
     try {
-      let downloadUrl = "";
-
-      // Si el usuario seleccionó una imagen, la subimos a Firebase Storage primero
-      if (imageUri) {
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
-
-        // Creamos una ruta única para la imagen
-        const imageRef = ref(
-          storage,
-          `listings/${currentUser.uid}_${Date.now()}.jpg`,
-        );
-        await uploadBytes(imageRef, blob);
-        downloadUrl = await getDownloadURL(imageRef);
-      }
-
-      // Guardamos los datos en Firestore (con o sin imagen)
       await addDoc(collection(db, "listings"), {
         vendedor_id: currentUser.uid,
         titulo: titulo.trim(),
         descripcion: descripcion.trim(),
         precio: parseFloat(precio),
-        tipo: tipo,
+        tipo,
         categoria: categoria.trim(),
         estado: "activo",
-        imagen_url: downloadUrl, // Guardamos el link de la foto
-        interesados: [],
+        imagenes: imagenesBase64,
         fecha_creacion: new Date().toISOString(),
       });
-
-      Alert.alert("Éxito", "Tu anuncio ha sido publicado.");
-
-      // Limpiamos todo
+      Alert.alert("Éxito", "Anuncio publicado.");
       setTitulo("");
       setDescripcion("");
       setPrecio("");
       setCategoria("");
-      setImageUri(null);
+      setImagenesBase64([]);
       navigation.navigate("Inicio");
     } catch (error: any) {
-      Alert.alert("Error al publicar", error.message);
-      console.log(error);
+      Alert.alert("Error", error.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.headerTitle}>Crear Nuevo Anuncio</Text>
+    <ScrollView
+      contentContainerStyle={globalStyles.containerPadding}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
+      <Text style={globalStyles.title}>Publicar en la Tienda</Text>
 
-        <TouchableOpacity
-          style={styles.imagePickerContainer}
-          onPress={pickImage}
-        >
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-          ) : (
-            <Text style={styles.imagePickerText}>+ Añadir foto del {tipo}</Text>
-          )}
+      <Text style={globalStyles.label}>Fotos ({imagenesBase64.length}/5)</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={localStyles.imageScroll}
+      >
+        <TouchableOpacity style={localStyles.addCard} onPress={pickImage}>
+          <Text style={localStyles.addText}>+</Text>
         </TouchableOpacity>
-
-        {/* --- El resto del formulario se mantiene igual --- */}
-        <View style={styles.typeContainer}>
-          <TouchableOpacity
-            style={[
-              styles.typeButton,
-              tipo === "producto" && styles.typeButtonActive,
-            ]}
-            onPress={() => setTipo("producto")}
-          >
-            <Text
-              style={[
-                styles.typeText,
-                tipo === "producto" && styles.typeTextActive,
-              ]}
-            >
-              Producto
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.typeButton,
-              tipo === "servicio" && styles.typeButtonActive,
-            ]}
-            onPress={() => setTipo("servicio")}
-          >
-            <Text
-              style={[
-                styles.typeText,
-                tipo === "servicio" && styles.typeTextActive,
-              ]}
-            >
-              Servicio
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.label}>Título *</Text>
-        <TextInput
-          style={styles.input}
-          value={titulo}
-          onChangeText={setTitulo}
-          placeholder="Ej. Calculadora"
-        />
-
-        <Text style={styles.label}>Categoría *</Text>
-        <View style={styles.categoryGrid}>
-          {CATEGORIAS.map((cat) => (
+        {imagenesBase64.map((uri, index) => (
+          <View key={index} style={localStyles.imageWrapper}>
+            <Image source={{ uri }} style={localStyles.thumbnail} />
             <TouchableOpacity
-              key={cat}
-              style={[
-                styles.categoryChip,
-                categoria === cat && styles.categoryChipActive,
-              ]}
-              onPress={() => setCategoria(cat)}
+              style={localStyles.removeBadge}
+              onPress={() => removeImage(index)}
             >
-              <Text
-                style={[
-                  styles.categoryChipText,
-                  categoria === cat && styles.categoryChipTextActive,
-                ]}
-              >
-                {cat}
-              </Text>
+              <Text style={localStyles.removeText}>X</Text>
             </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.label}>Precio (S/) *</Text>
-        <TextInput
-          style={styles.input}
-          value={precio}
-          onChangeText={setPrecio}
-          placeholder="0.00"
-          keyboardType="numeric"
-        />
-
-        <Text style={styles.label}>Descripción</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={descripcion}
-          onChangeText={setDescripcion}
-          placeholder="Detalles extra..."
-          multiline
-          numberOfLines={4}
-        />
-
-        <TouchableOpacity
-          style={styles.submitButton}
-          onPress={handlePublish}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.submitButtonText}>Publicar Anuncio</Text>
-          )}
-        </TouchableOpacity>
+          </View>
+        ))}
       </ScrollView>
-    </TouchableWithoutFeedback>
+
+      <View style={localStyles.typeContainer}>
+        <TouchableOpacity
+          style={[
+            localStyles.typeButton,
+            tipo === "producto" && localStyles.typeButtonActive,
+          ]}
+          onPress={() => setTipo("producto")}
+        >
+          <Text
+            style={[
+              localStyles.typeText,
+              tipo === "producto" && localStyles.typeTextActive,
+            ]}
+          >
+            Producto
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            localStyles.typeButton,
+            tipo === "servicio" && localStyles.typeButtonActive,
+          ]}
+          onPress={() => setTipo("servicio")}
+        >
+          <Text
+            style={[
+              localStyles.typeText,
+              tipo === "servicio" && localStyles.typeTextActive,
+            ]}
+          >
+            Servicio
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={globalStyles.label}>Título *</Text>
+      <TextInput
+        style={globalStyles.input}
+        value={titulo}
+        onChangeText={setTitulo}
+        placeholder="¿Qué vendes?"
+      />
+
+      <Text style={globalStyles.label}>Categoría *</Text>
+      <View style={localStyles.categoryGrid}>
+        {CATEGORIAS.map((cat) => (
+          <TouchableOpacity
+            key={cat}
+            style={[
+              localStyles.categoryChip,
+              categoria === cat && localStyles.categoryChipActive,
+            ]}
+            onPress={() => setCategoria(cat)}
+          >
+            <Text
+              style={[
+                localStyles.categoryChipText,
+                categoria === cat && localStyles.categoryChipTextActive,
+              ]}
+            >
+              {cat}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={globalStyles.label}>Precio (S/) *</Text>
+      <TextInput
+        style={globalStyles.input}
+        value={precio}
+        onChangeText={setPrecio}
+        placeholder="0.00"
+        keyboardType="numeric"
+      />
+
+      <Text style={globalStyles.label}>Descripción</Text>
+      <TextInput
+        style={[globalStyles.input, localStyles.textArea]}
+        value={descripcion}
+        onChangeText={setDescripcion}
+        placeholder="Detalles extra..."
+        multiline
+        numberOfLines={4}
+      />
+
+      <TouchableOpacity
+        style={globalStyles.primaryButton}
+        onPress={handlePublish}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color={COLORS.surface} />
+        ) : (
+          <Text style={globalStyles.primaryButtonText}>Subir Anuncio</Text>
+        )}
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { padding: 20, flexGrow: 1, backgroundColor: "#f5f5f5" },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#5A0028",
-    marginBottom: 20,
-    textAlign: "center",
+const localStyles = StyleSheet.create({
+  imageScroll: { flexDirection: "row", marginBottom: SPACING.lg },
+  addCard: {
+    width: 80,
+    height: 80,
+    backgroundColor: COLORS.border,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: SPACING.sm,
+    borderStyle: "dashed",
+    borderWidth: 1,
+    borderColor: COLORS.textLight,
   },
-  imagePickerContainer: {
-    height: 150,
-    backgroundColor: "#e1e4e8",
+  addText: { fontSize: 30, color: COLORS.textMuted },
+  imageWrapper: { position: "relative", marginRight: SPACING.sm },
+  thumbnail: { width: 80, height: 80, borderRadius: 8 },
+  removeBadge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: COLORS.danger,
+    width: 20,
+    height: 20,
     borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderStyle: "dashed",
+    zIndex: 1,
   },
-  imagePreview: { width: "100%", height: "100%" },
-  imagePickerText: { color: "#666", fontWeight: "bold", fontSize: 16 },
-  typeContainer: { flexDirection: "row", marginBottom: 20 },
+  removeText: { color: COLORS.surface, fontSize: 12, fontWeight: "bold" },
+  typeContainer: { flexDirection: "row", marginBottom: SPACING.lg },
   typeButton: {
     flex: 1,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#5A0028",
+    borderColor: COLORS.primary,
     alignItems: "center",
   },
-  typeButtonActive: { backgroundColor: "#5A0028" },
-  typeText: { color: "#5A0028", fontWeight: "bold" },
-  typeTextActive: { color: "#fff" },
-  label: { fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 5 },
-  input: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 15,
-  },
+  typeButtonActive: { backgroundColor: COLORS.primary },
+  typeText: { color: COLORS.primary, fontWeight: "bold" },
+  typeTextActive: { color: COLORS.surface },
   textArea: { height: 100, textAlignVertical: "top" },
-  categoryGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 15 },
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: SPACING.md,
+  },
   categoryChip: {
     backgroundColor: "#eee",
     paddingHorizontal: 12,
@@ -272,15 +271,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
-  categoryChipActive: { backgroundColor: "#5A0028" },
-  categoryChipText: { color: "#666", fontSize: 13 },
-  categoryChipTextActive: { color: "#fff", fontWeight: "bold" },
-  submitButton: {
-    backgroundColor: "#5A0028",
-    padding: 15,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  categoryChipActive: { backgroundColor: COLORS.primary },
+  categoryChipText: { color: COLORS.textMuted, fontSize: 13 },
+  categoryChipTextActive: { color: COLORS.surface, fontWeight: "bold" },
 });

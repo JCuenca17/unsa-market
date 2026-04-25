@@ -8,130 +8,188 @@ import {
   ActivityIndicator,
   Linking,
   Alert,
+  ScrollView,
+  Image,
+  Dimensions,
 } from "react-native";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../services/firebaseConfig";
+import { COLORS, SPACING } from "../theme/theme";
 
-export default function ListingDetailScreen({ route, navigation }: any) {
-  // Recibimos los datos del anuncio seleccionado
+const { width } = Dimensions.get("window");
+
+export default function ListingDetailScreen({ route }: any) {
   const { item } = route.params;
-  const [vendedorPhone, setVendedorPhone] = useState("");
-  const [vendedorNombre, setVendedorNombre] = useState("");
+  const [vendedor, setVendedor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   useEffect(() => {
-    const fetchSellerData = async () => {
+    const fetchSeller = async () => {
       try {
-        const sellerDoc = await getDoc(doc(db, "users", item.vendedor_id));
-        if (sellerDoc.exists()) {
-          setVendedorPhone(sellerDoc.data().whatsapp || "");
-          setVendedorNombre(sellerDoc.data().nombre || "Compañero UNSA");
-        }
-      } catch (error) {
-        console.error("Error obteniendo datos del vendedor:", error);
+        const docSnap = await getDoc(doc(db, "users", item.vendedor_id));
+        if (docSnap.exists()) setVendedor(docSnap.data());
+      } catch (e) {
+        console.log(e);
       } finally {
         setLoading(false);
       }
     };
-    fetchSellerData();
-  }, [item.vendedor_id]);
+    fetchSeller();
+  }, []);
 
   const handleContact = () => {
-    if (!vendedorPhone) {
-      Alert.alert(
-        "Aviso",
-        "El vendedor no tiene un número de WhatsApp registrado.",
-      );
+    if (!vendedor?.whatsapp) {
+      Alert.alert("Aviso", "El vendedor no tiene WhatsApp registrado.");
       return;
     }
-
-    const mensaje = `Hola ${vendedorNombre}, vi tu anuncio "${item.titulo}" en UNSA Market. ¿Sigue disponible?`;
-    // Usamos wa.me que es el formato universal de WhatsApp
-    const url = `https://wa.me/51${vendedorPhone}?text=${encodeURIComponent(mensaje)}`;
-
-    Linking.openURL(url).catch((err) => {
-      Alert.alert("Error", "No se pudo abrir WhatsApp. Verifica tu conexión.");
-      console.error(err);
-    });
+    const msg = `Hola ${vendedor.nombre}, vi tu anuncio "${item.titulo}" en UNSA Market. ¿Sigue disponible?`;
+    Linking.openURL(
+      `https://wa.me/51${vendedor.whatsapp}?text=${encodeURIComponent(msg)}`,
+    );
   };
 
+  const handleScroll = (event: any) => {
+    const slideSize = event.nativeEvent.layoutMeasurement.width;
+    const index = event.nativeEvent.contentOffset.x / slideSize;
+    setActiveImageIndex(Math.round(index));
+  };
+  const hasImages = item.imagenes && item.imagenes.length > 0;
+
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.badge}>{item.tipo.toUpperCase()}</Text>
-        <Text style={styles.category}>{item.categoria}</Text>
-      </View>
-
-      <Text style={styles.title}>{item.titulo}</Text>
-      <Text style={styles.price}>S/ {item.precio.toFixed(2)}</Text>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Descripción</Text>
-        <Text style={styles.description}>
-          {item.descripcion || "Sin descripción adicional."}
-        </Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Vendedor</Text>
-        {loading ? (
-          <ActivityIndicator color="#5A0028" />
-        ) : (
-          <Text style={styles.sellerName}>{vendedorNombre}</Text>
+    <ScrollView style={localStyles.container}>
+      <View style={localStyles.galleryContainer}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          style={localStyles.gallery}
+        >
+          {hasImages ? (
+            item.imagenes.map((img: string, i: number) => (
+              <Image
+                key={i}
+                source={{ uri: img }}
+                style={localStyles.mainImage}
+              />
+            ))
+          ) : (
+            <View style={[localStyles.mainImage, localStyles.noImage]}>
+              <Text style={localStyles.noImageText}>Sin imagen</Text>
+            </View>
+          )}
+        </ScrollView>
+        {hasImages && item.imagenes.length > 1 && (
+          <View style={localStyles.paginationBadge}>
+            <Text style={localStyles.paginationText}>
+              {activeImageIndex + 1} / {item.imagenes.length}
+            </Text>
+          </View>
         )}
       </View>
 
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.contactButton} onPress={handleContact}>
-          <Text style={styles.contactButtonText}>Contactar por WhatsApp</Text>
+      <View style={localStyles.infoBox}>
+        <Text style={localStyles.price}>
+          S/ {item.precio ? item.precio.toFixed(2) : "0.00"}
+        </Text>
+        <Text style={localStyles.title}>{item.titulo}</Text>
+        <Text style={localStyles.category}>
+          {item.categoria} • {item.tipo}
+        </Text>
+        <View style={localStyles.divider} />
+        <Text style={localStyles.sectionLabel}>Descripción</Text>
+        <Text style={localStyles.description}>
+          {item.descripcion || "El vendedor no incluyó detalles adicionales."}
+        </Text>
+
+        <View style={localStyles.sellerCard}>
+          <Text style={localStyles.sectionLabel}>Vendedor</Text>
+          {loading ? (
+            <ActivityIndicator color={COLORS.primary} />
+          ) : (
+            <Text style={localStyles.sellerName}>
+              {vendedor?.nombre || "Usuario UNSA"}
+            </Text>
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={localStyles.whatsappButton}
+          onPress={handleContact}
+        >
+          <Text style={localStyles.whatsappText}>Contactar por WhatsApp</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 20 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 15,
-  },
-  badge: {
-    backgroundColor: "#eee",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  category: { color: "#666", fontSize: 14, fontWeight: "600" },
-  title: { fontSize: 24, fontWeight: "bold", color: "#333", marginBottom: 10 },
-  price: {
-    fontSize: 22,
-    color: "#5A0028",
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
-  section: { marginBottom: 25 },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    paddingBottom: 5,
-  },
-  description: { fontSize: 15, color: "#555", lineHeight: 22 },
-  sellerName: { fontSize: 16, color: "#333" },
-  footer: { marginTop: "auto", paddingTop: 20 },
-  contactButton: {
-    backgroundColor: "#25D366",
-    padding: 15,
-    borderRadius: 8,
+const localStyles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.surface },
+  galleryContainer: { position: "relative" },
+  gallery: { height: 300 },
+  mainImage: { width: width, height: 300, resizeMode: "cover" },
+  noImage: {
+    backgroundColor: COLORS.border,
+    justifyContent: "center",
     alignItems: "center",
-  }, // Color verde de WhatsApp
-  contactButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  },
+  noImageText: { color: COLORS.textLight, fontSize: 16 },
+  paginationBadge: {
+    position: "absolute",
+    bottom: 15,
+    right: 15,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  paginationText: { color: COLORS.surface, fontSize: 14, fontWeight: "bold" },
+  infoBox: { padding: SPACING.lg },
+  price: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: COLORS.primary,
+    marginBottom: SPACING.xs,
+  },
+  title: { fontSize: 22, color: COLORS.text, marginBottom: SPACING.sm },
+  category: {
+    color: COLORS.textLight,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    fontSize: 12,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: SPACING.lg,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    color: COLORS.textLight,
+    fontWeight: "bold",
+    marginBottom: SPACING.xs,
+  },
+  description: {
+    fontSize: 16,
+    color: COLORS.textMuted,
+    lineHeight: 24,
+    marginBottom: SPACING.lg,
+  },
+  sellerCard: {
+    backgroundColor: COLORS.background,
+    padding: SPACING.md,
+    borderRadius: 10,
+    marginBottom: SPACING.lg,
+  },
+  sellerName: { fontSize: 18, fontWeight: "bold", color: COLORS.text },
+  whatsappButton: {
+    backgroundColor: COLORS.secondary,
+    padding: 18,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  whatsappText: { color: COLORS.surface, fontWeight: "bold", fontSize: 16 },
 });

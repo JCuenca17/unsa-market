@@ -17,6 +17,7 @@ import {
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
+import { globalStyles, COLORS, SPACING } from "../theme/theme"; // <-- Importamos el tema
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -25,7 +26,6 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async () => {
-    // Barrera de seguridad: Solo correos UNSA
     if (!email.trim().toLowerCase().endsWith("@unsa.edu.pe")) {
       Alert.alert(
         "Acceso Denegado",
@@ -33,7 +33,6 @@ export default function LoginScreen() {
       );
       return;
     }
-
     if (password.length < 6) {
       Alert.alert("Error", "La contraseña debe tener al menos 6 caracteres.");
       return;
@@ -42,22 +41,18 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       if (isLogin) {
-        // Iniciar sesión
         await signInWithEmailAndPassword(auth, email.trim(), password);
       } else {
-        // Registrar nuevo usuario
         const userCredential = await createUserWithEmailAndPassword(
           auth,
           email.trim(),
           password,
         );
-
-        // Al registrar, creamos su perfil básico en la base de datos Firestore
         await setDoc(doc(db, "users", userCredential.user.uid), {
           email: email.trim().toLowerCase(),
-          nombre: "", // Se llenará después
-          facultad: "", // Se llenará después
-          whatsapp: "", // Se llenará después
+          nombre: "",
+          facultad: "",
+          whatsapp: "",
           rating_promedio: 0,
           total_ventas: 0,
         });
@@ -71,16 +66,25 @@ export default function LoginScreen() {
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
-        <Text style={styles.title}>UNSA Market & Skills</Text>
-        <Text style={styles.subtitle}>
+      <View
+        style={[globalStyles.containerPadding, { justifyContent: "center" }]}
+      >
+        <Text
+          style={[
+            globalStyles.title,
+            { fontSize: 28, marginBottom: SPACING.sm },
+          ]}
+        >
+          UNSA Market & Skills
+        </Text>
+        <Text style={localStyles.subtitle}>
           {isLogin
             ? "Inicia sesión con tu correo institucional"
             : "Crea tu cuenta universitaria"}
         </Text>
 
         <TextInput
-          style={styles.input}
+          style={globalStyles.input}
           placeholder="ejemplo@unsa.edu.pe"
           value={email}
           onChangeText={setEmail}
@@ -88,7 +92,7 @@ export default function LoginScreen() {
           autoCapitalize="none"
         />
         <TextInput
-          style={styles.input}
+          style={globalStyles.input}
           placeholder="Contraseña"
           value={password}
           onChangeText={setPassword}
@@ -96,21 +100,21 @@ export default function LoginScreen() {
         />
 
         <TouchableOpacity
-          style={styles.button}
+          style={globalStyles.primaryButton}
           onPress={handleAuth}
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={COLORS.surface} />
           ) : (
-            <Text style={styles.buttonText}>
+            <Text style={globalStyles.primaryButtonText}>
               {isLogin ? "Ingresar" : "Registrarse"}
             </Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
-          <Text style={styles.switchText}>
+          <Text style={localStyles.switchText}>
             {isLogin
               ? "¿No tienes cuenta? Regístrate aquí"
               : "¿Ya tienes cuenta? Inicia sesión"}
@@ -121,46 +125,17 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    padding: 20,
-    backgroundColor: "#f5f5f5",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 10,
-    color: "#5A0028",
-  }, // Color guinda base
+const localStyles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     textAlign: "center",
-    marginBottom: 30,
-    color: "#666",
+    marginBottom: SPACING.xl,
+    color: COLORS.textMuted,
   },
-  input: {
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  button: {
-    backgroundColor: "#5A0028",
-    padding: 15,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   switchText: {
     textAlign: "center",
-    marginTop: 20,
-    color: "#5A0028",
+    marginTop: SPACING.lg,
+    color: COLORS.primary,
     fontWeight: "600",
   },
 });

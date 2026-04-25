@@ -15,6 +15,7 @@ import {
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { db, auth } from "../services/firebaseConfig";
+import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
 export default function ProfileScreen() {
   const [nombre, setNombre] = useState("");
@@ -22,7 +23,6 @@ export default function ProfileScreen() {
   const [facultad, setFacultad] = useState("");
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
-
   const currentUser = auth.currentUser;
 
   useEffect(() => {
@@ -49,11 +49,10 @@ export default function ProfileScreen() {
     if (!nombre || !whatsapp) {
       Alert.alert(
         "Campos obligatorios",
-        "El nombre y WhatsApp son necesarios para que puedan contactarte.",
+        "El nombre y WhatsApp son necesarios.",
       );
       return;
     }
-
     setUpdating(true);
     try {
       await updateDoc(doc(db, "users", currentUser!.uid), {
@@ -69,104 +68,90 @@ export default function ProfileScreen() {
     }
   };
 
-  if (loading) {
+  if (loading)
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#5A0028" />
+      <View style={globalStyles.center}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
-  }
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>{nombre.charAt(0) || "U"}</Text>
+      <ScrollView contentContainerStyle={globalStyles.containerPadding}>
+        <View style={localStyles.avatarContainer}>
+          <View style={localStyles.avatarPlaceholder}>
+            <Text style={localStyles.avatarText}>
+              {nombre.charAt(0) || "U"}
+            </Text>
           </View>
-          <Text style={styles.emailText}>{currentUser?.email}</Text>
+          <Text style={localStyles.emailText}>{currentUser?.email}</Text>
         </View>
 
-        <Text style={styles.label}>Nombre Completo</Text>
+        <Text style={globalStyles.label}>Nombre Completo</Text>
         <TextInput
-          style={styles.input}
+          style={globalStyles.input}
           value={nombre}
           onChangeText={setNombre}
           placeholder="Ej. Juan Perez"
         />
 
-        <Text style={styles.label}>WhatsApp (Sin el +51)</Text>
+        <Text style={globalStyles.label}>WhatsApp (Sin el +51)</Text>
         <TextInput
-          style={styles.input}
+          style={globalStyles.input}
           value={whatsapp}
           onChangeText={setWhatsapp}
           placeholder="987654321"
           keyboardType="phone-pad"
         />
 
-        <Text style={styles.label}>Facultad / Escuela</Text>
+        <Text style={globalStyles.label}>Facultad / Escuela</Text>
         <TextInput
-          style={styles.input}
+          style={globalStyles.input}
           value={facultad}
           onChangeText={setFacultad}
           placeholder="Ej. Ingeniería de Sistemas"
         />
 
         <TouchableOpacity
-          style={styles.updateButton}
+          style={globalStyles.primaryButton}
           onPress={handleUpdate}
           disabled={updating}
         >
           {updating ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={COLORS.surface} />
           ) : (
-            <Text style={styles.updateButtonText}>Guardar Cambios</Text>
+            <Text style={globalStyles.primaryButtonText}>Guardar Cambios</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.logoutButton}
+          style={localStyles.logoutButton}
           onPress={() => signOut(auth)}
         >
-          <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
+          <Text style={localStyles.logoutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
       </ScrollView>
     </TouchableWithoutFeedback>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { padding: 20, flexGrow: 1, backgroundColor: "#f5f5f5" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  avatarContainer: { alignItems: "center", marginBottom: 30 },
+const localStyles = StyleSheet.create({
+  avatarContainer: { alignItems: "center", marginBottom: SPACING.xl },
   avatarPlaceholder: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#5A0028",
+    backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: SPACING.sm,
   },
-  avatarText: { color: "#fff", fontSize: 32, fontWeight: "bold" },
-  emailText: { color: "#666", fontSize: 14 },
-  label: { fontSize: 14, fontWeight: "bold", color: "#333", marginBottom: 5 },
-  input: {
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    marginBottom: 20,
-  },
-  updateButton: {
-    backgroundColor: "#5A0028",
-    padding: 15,
-    borderRadius: 8,
+  avatarText: { color: COLORS.surface, fontSize: 32, fontWeight: "bold" },
+  emailText: { color: COLORS.textMuted, fontSize: 14 },
+  logoutButton: {
+    padding: SPACING.md,
     alignItems: "center",
-    marginBottom: 15,
+    marginTop: SPACING.sm,
   },
-  updateButtonText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-  logoutButton: { padding: 15, alignItems: "center" },
-  logoutButtonText: { color: "#d9534f", fontWeight: "bold" },
+  logoutButtonText: { color: COLORS.danger, fontWeight: "bold" },
 });

@@ -1,5 +1,5 @@
 // src/screens/HomeScreen.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,15 +8,12 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Image,
+  RefreshControl,
 } from "react-native";
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  orderBy,
-} from "firebase/firestore";
+import { useFocusEffect } from "@react-navigation/native";
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { db } from "../services/firebaseConfig";
+import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
 interface Listing {
   id: string;
@@ -24,78 +21,98 @@ interface Listing {
   precio: number;
   tipo: string;
   categoria: string;
-  imagen_url?: string; // Habilitamos el espacio para la imagen
+  imagenes?: string[];
 }
 
 export default function HomeScreen({ navigation }: any) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const q = query(
-      collection(db, "listings"),
-      where("estado", "==", "activo"),
-      orderBy("fecha_creacion", "desc"),
-    );
-
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+  const fetchListings = async () => {
+    try {
+      const q = query(
+        collection(db, "listings"),
+        where("estado", "==", "activo"),
+        orderBy("fecha_creacion", "desc"),
+      );
+      const querySnapshot = await getDocs(q);
       const fetchedListings: Listing[] = [];
-      querySnapshot.forEach((doc) => {
-        fetchedListings.push({ id: doc.id, ...doc.data() } as Listing);
-      });
+      querySnapshot.forEach((doc) =>
+        fetchedListings.push({ id: doc.id, ...doc.data() } as Listing),
+      );
       setListings(fetchedListings);
+    } catch (error) {
+      console.error("Error al descargar catálogo:", error);
+    } finally {
       setLoading(false);
-    });
+      setRefreshing(false);
+    }
+  };
 
-    return () => unsubscribe();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchListings();
+    }, []),
+  );
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchListings();
+  };
 
   const renderItem = ({ item }: { item: Listing }) => {
-    // Imagen por defecto temporal para que el UI se vea como un marketplace real
     const defaultImage =
       item.tipo === "producto"
-        ? "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80" // Audífonos (Tecnología)
-        : "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&q=80"; // Estudiantes estudiando (Servicio)
+        ? "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80"
+        : "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&q=80";
+    const coverImage =
+      item.imagenes && item.imagenes.length > 0
+        ? item.imagenes[0]
+        : defaultImage;
 
     return (
       <TouchableOpacity
-        style={styles.card}
+        style={localStyles.card}
         onPress={() => navigation.navigate("ListingDetail", { item })}
         activeOpacity={0.9}
       >
-        <Image
-          source={{ uri: item.imagen_url || defaultImage }}
-          style={styles.cardImage}
-        />
-        <View style={styles.cardContent}>
-          <Text style={styles.price}>S/ {item.precio.toFixed(2)}</Text>
-          <Text style={styles.title} numberOfLines={2}>
+        <Image source={{ uri: coverImage }} style={localStyles.cardImage} />
+        <View style={localStyles.cardContent}>
+          <Text style={localStyles.price}>S/ {item.precio.toFixed(2)}</Text>
+          <Text style={localStyles.title} numberOfLines={2}>
             {item.titulo}
           </Text>
-          <Text style={styles.category}>{item.categoria}</Text>
+          <Text style={localStyles.category}>{item.categoria}</Text>
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <View style={styles.container}>
+    <View style={globalStyles.container}>
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#5A0028" />
+        <View style={globalStyles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       ) : (
         <FlatList
           data={listings}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          numColumns={2} // ¡El truco mágico para el grid!
-          columnWrapperStyle={styles.row} // Estilo para separar las columnas
-          contentContainerStyle={styles.listContainer}
+          numColumns={2}
+          columnWrapperStyle={localStyles.row}
+          contentContainerStyle={{ padding: SPACING.sm }}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>
+            <Text style={globalStyles.emptyText}>
               No hay anuncios disponibles en este momento.
             </Text>
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.primary]}
+            />
           }
         />
       )}
@@ -103,38 +120,34 @@ export default function HomeScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f0f2f5" }, // Gris más claro de fondo
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  listContainer: { padding: 10 },
-  row: { justifyContent: "space-between" }, // Separa equitativamente las dos tarjetas
+const localStyles = StyleSheet.create({
+  row: { justifyContent: "space-between" },
   card: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.surface,
     borderRadius: 8,
-    marginBottom: 15,
+    marginBottom: SPACING.md,
     marginHorizontal: 5,
     overflow: "hidden",
     elevation: 2,
     shadowColor: "#000",
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    maxWidth: "48%", // Asegura que quepan exactamente 2 por fila
+    maxWidth: "48%",
   },
-  cardImage: { width: "100%", height: 140, backgroundColor: "#e1e4e8" },
-  cardContent: { padding: 10 },
-  price: { fontSize: 18, color: "#333", fontWeight: "bold", marginBottom: 4 },
-  title: { fontSize: 13, color: "#555", marginBottom: 6, height: 35 },
+  cardImage: { width: "100%", height: 140, backgroundColor: COLORS.border },
+  cardContent: { padding: SPACING.sm },
+  price: {
+    fontSize: 18,
+    color: COLORS.text,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  title: { fontSize: 13, color: COLORS.textMuted, marginBottom: 6, height: 35 },
   category: {
-    color: "#888",
+    color: COLORS.textLight,
     fontSize: 11,
     fontWeight: "500",
     textTransform: "uppercase",
-  },
-  emptyText: {
-    textAlign: "center",
-    marginTop: 50,
-    color: "#999",
-    fontSize: 16,
   },
 });
