@@ -3,10 +3,11 @@ import React, { useState, useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "../services/firebaseConfig";
 
+// Importaciones de pantallas
 import LoginScreen from "../screens/LoginScreen";
 import HomeScreen from "../screens/HomeScreen";
 import ListingDetailScreen from "../screens/ListingDetailScreen";
@@ -14,6 +15,7 @@ import ProfileScreen from "../screens/ProfileScreen";
 import MyListingsScreen from "../screens/MyListingsScreen";
 import EditListingScreen from "../screens/EditListingScreen";
 import EditProfileScreen from "../screens/EditProfileScreen";
+import CreateListingScreen from "../screens/CreateListingScreen"; // <-- Importación añadida
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -77,6 +79,12 @@ export default function AppNavigator() {
             name="EditListing"
             component={EditListingScreen}
             options={{ title: "Editar Anuncio" }}
+          />
+          {/* Registro de la pantalla de publicación añadida al Stack */}
+          <Stack.Screen
+            name="Publicar"
+            component={CreateListingScreen}
+            options={{ title: "Nuevo Anuncio" }}
           />
         </Stack.Navigator>
       ) : (
