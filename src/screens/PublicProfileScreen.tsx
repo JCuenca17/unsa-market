@@ -3,200 +3,213 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
-  ActivityIndicator,
+  Image,
   FlatList,
+  ActivityIndicator,
+  StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 import {
   doc,
   getDoc,
   collection,
-  getDocs,
   query,
-  orderBy,
+  where,
+  getDocs,
 } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { db } from "../services/firebaseConfig";
-import { globalStyles, COLORS, SPACING } from "../theme/theme";
+import { COLORS, SPACING } from "../theme/theme";
 
-interface Review {
-  id: string;
-  rating: number;
-  comentario: string;
-  autor_email: string;
-  fecha: string;
-  listing_titulo?: string;
-}
-
-export default function PublicProfileScreen({ route }: any) {
+export default function PublicProfileScreen({ route, navigation }: any) {
   const { vendedorId } = route.params;
   const [vendedor, setVendedor] = useState<any>(null);
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Cargar datos del vendedor
-        const userDoc = await getDoc(doc(db, "users", vendedorId));
-        if (userDoc.exists()) setVendedor(userDoc.data());
+        // 1. Obtener datos del vendedor
+        const vDoc = await getDoc(doc(db, "users", vendedorId));
+        if (vDoc.exists()) {
+          setVendedor(vDoc.data());
+        }
 
-        // Cargar reseñas
+        // 2. Obtener sus publicaciones activas
         const q = query(
-          collection(db, "users", vendedorId, "reviews"),
-          orderBy("fecha", "desc"),
+          collection(db, "listings"),
+          where("vendedor_id", "==", vendedorId),
         );
-        const querySnapshot = await getDocs(q);
-        const fetchedReviews: Review[] = [];
-
-        querySnapshot.forEach((doc) => {
-          fetchedReviews.push({ id: doc.id, ...doc.data() } as Review);
-        });
-
-        setReviews(fetchedReviews);
-      } catch (error) {
-        console.error(error);
+        const lSnap = await getDocs(q);
+        setListings(lSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (e) {
+        console.error("Error al cargar perfil público:", e);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [vendedorId]);
 
-  if (loading)
+  if (loading) {
     return (
-      <View style={globalStyles.center}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
+  }
 
   return (
-    <View style={globalStyles.container}>
-      {/* Cabecera del Perfil Público */}
-      <View style={localStyles.header}>
-        <View style={localStyles.avatarPlaceholder}>
-          <Text style={localStyles.avatarText}>
-            {vendedor?.nombre?.charAt(0) || "U"}
+    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+      {/* CABECERA DEL PERFIL */}
+      <View style={styles.header}>
+        <Image
+          source={{
+            uri: vendedor?.photoURL || "https://via.placeholder.com/150",
+          }}
+          style={styles.avatar}
+        />
+        <Text style={styles.name}>{vendedor?.nombre || "Estudiante UNSA"}</Text>
+        <Text style={styles.sub}>{vendedor?.facultad}</Text>
+        <View style={styles.stats}>
+          <Text style={styles.statText}>
+            ⭐ {vendedor?.rating_promedio?.toFixed(1) || "Nuevo"}
           </Text>
-        </View>
-        <Text style={localStyles.name}>
-          {vendedor?.nombre || "Vendedor UNSA"}
-        </Text>
-        <Text style={localStyles.faculty}>{vendedor?.facultad || "UNSA"}</Text>
-        <View style={localStyles.ratingBadge}>
-          <Ionicons name="star" size={18} color="#FFD700" />
-          <Text style={localStyles.ratingText}>
-            {vendedor?.rating_promedio
-              ? vendedor.rating_promedio.toFixed(1)
-              : "Nuevo"}{" "}
-            ({reviews.length} reseñas)
+          <Text style={{ marginHorizontal: 15, color: COLORS.textLight }}>
+            |
+          </Text>
+          <Text style={styles.statText}>
+            {vendedor?.total_ventas || 0} Ventas
           </Text>
         </View>
       </View>
 
-      {/* Lista de Reseñas */}
+      {/* LISTA DE PUBLICACIONES DEL VENDEDOR */}
+      <Text style={styles.listTitle}>Publicaciones Activas</Text>
       <FlatList
-        data={reviews}
+        data={listings}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: SPACING.md }}
-        ListHeaderComponent={
-          <Text style={localStyles.sectionTitle}>
-            Comentarios de compradores
-          </Text>
-        }
-        ListEmptyComponent={
-          <Text style={globalStyles.emptyText}>
-            Este vendedor aún no tiene reseñas.
-          </Text>
-        }
         renderItem={({ item }) => (
-          <View style={localStyles.reviewCard}>
-            <View style={localStyles.reviewHeader}>
-              {/* Muestra solo la primera parte del correo para privacidad */}
-              <Text style={localStyles.reviewAuthor}>
-                {item.autor_email?.split("@")[0] || "Usuario"}
-              </Text>
-              <View style={{ flexDirection: "row" }}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Ionicons
-                    key={star}
-                    name={star <= item.rating ? "star" : "star-outline"}
-                    size={14}
-                    color="#FFD700"
-                  />
-                ))}
+          <TouchableOpacity
+            style={styles.listingItem}
+            // Navegación al detalle del anuncio pasando el objeto completo
+            onPress={() => navigation.navigate("ListingDetail", { item })}
+          >
+            {/* Imagen en miniatura */}
+            {item.imagenes && item.imagenes.length > 0 ? (
+              <Image
+                source={{ uri: item.imagenes[0] }}
+                style={styles.listingImage}
+              />
+            ) : (
+              <View style={styles.placeholderImage}>
+                <Ionicons name="image-outline" size={24} color="#ccc" />
               </View>
-            </View>
-            {item.listing_titulo && (
-              <Text style={localStyles.listingTitle}>
-                Compró: {item.listing_titulo}
-              </Text>
             )}
-            <Text style={localStyles.reviewComment}>{item.comentario}</Text>
-          </View>
+
+            {/* Detalles del anuncio */}
+            <View style={styles.listingInfo}>
+              <Text style={styles.listingTitle}>{item.titulo}</Text>
+              <Text style={styles.listingPrice}>S/ {item.precio}</Text>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={COLORS.textLight}
+            />
+          </TouchableOpacity>
+        )}
+        ListEmptyComponent={() => (
+          <Text style={styles.emptyText}>
+            Este estudiante no tiene publicaciones activas.
+          </Text>
         )}
       />
     </View>
   );
 }
 
-const localStyles = StyleSheet.create({
+const styles = StyleSheet.create({
   header: {
     alignItems: "center",
-    backgroundColor: COLORS.surface,
-    paddingVertical: SPACING.xl,
-    elevation: 2,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    marginBottom: SPACING.sm,
+    padding: 30,
+    backgroundColor: "#f9f9f9",
+    borderBottomWidth: 1,
+    borderColor: "#eee",
   },
-  avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: COLORS.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 10,
+    backgroundColor: "#eee",
   },
-  avatarText: { color: COLORS.surface, fontSize: 32, fontWeight: "bold" },
-  name: { fontSize: 22, fontWeight: "bold", color: COLORS.text },
-  faculty: { fontSize: 14, color: COLORS.textMuted, marginBottom: SPACING.sm },
-  ratingBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff9c4",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 15,
-  },
-  ratingText: { marginLeft: 5, fontWeight: "bold", color: "#8b8000" },
-  sectionTitle: {
-    fontSize: 18,
+  name: {
+    fontSize: 22,
     fontWeight: "bold",
     color: COLORS.text,
-    marginBottom: SPACING.md,
   },
-  reviewCard: {
-    backgroundColor: COLORS.surface,
-    padding: SPACING.md,
-    borderRadius: 10,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  reviewHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: SPACING.xs,
-  },
-  reviewAuthor: { fontWeight: "bold", color: COLORS.textMuted, fontSize: 13 },
-  listingTitle: {
-    fontSize: 12,
+  sub: {
     color: COLORS.primary,
-    marginBottom: SPACING.xs,
-    fontStyle: "italic",
+    fontWeight: "600",
+    marginTop: 4,
   },
-  reviewComment: { color: COLORS.text, fontSize: 14 },
+  stats: {
+    flexDirection: "row",
+    marginTop: 10,
+    alignItems: "center",
+  },
+  statText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    fontWeight: "500",
+  },
+  listTitle: {
+    padding: 15,
+    fontWeight: "bold",
+    fontSize: 18,
+    color: COLORS.text,
+  },
+  listingItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  listingImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    marginRight: 15,
+  },
+  placeholderImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: "#eee",
+    marginRight: 15,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  listingInfo: {
+    flex: 1,
+  },
+  listingTitle: {
+    fontWeight: "bold",
+    fontSize: 16,
+    color: COLORS.text,
+  },
+  listingPrice: {
+    color: COLORS.primary,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  emptyText: {
+    textAlign: "center",
+    color: COLORS.textLight,
+    marginTop: 20,
+  },
 });

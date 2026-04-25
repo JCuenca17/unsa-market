@@ -2,6 +2,7 @@
   "expo": {
     "name": "unsa-market",
     "slug": "unsa-market",
+    "scheme": "unsamarket",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,9 +14,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.unsa.market"
     },
     "android": {
+      "package": "com.unsa.market",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -25,6 +28,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e1a70a4a-be32-4fad-b189-4c421a2acc6b"
+      }
+    },
+    "plugins": [
+    ]
   }
 }

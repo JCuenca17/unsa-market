@@ -3,182 +3,188 @@ import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
+  StyleSheet,
   ScrollView,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { doc, getDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
-import { Ionicons } from "@expo/vector-icons"; // Librería profesional de iconos
+import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
 export default function ProfileScreen({ navigation }: any) {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const currentUser = auth.currentUser;
 
-  // Usamos useFocusEffect para que los datos se actualicen si volvemos de editar el perfil
+  // useFocusEffect recarga los datos cada vez que entras a esta pestaña (ideal por si cambiaste tu foto)
   useFocusEffect(
     useCallback(() => {
       const fetchUserData = async () => {
-        if (!currentUser) return;
         try {
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-          if (userDoc.exists()) {
-            setUserData(userDoc.data());
+          const docSnap = await getDoc(doc(db, "users", auth.currentUser!.uid));
+          if (docSnap.exists()) {
+            setUserData(docSnap.data());
           }
         } catch (error) {
-          console.error("Error al obtener perfil:", error);
+          console.error("Error cargando perfil:", error);
         } finally {
           setLoading(false);
         }
       };
       fetchUserData();
-    }, [currentUser]),
+    }, []),
   );
 
   if (loading)
     return (
-      <View style={globalStyles.center}>
+      <View style={{ flex: 1, justifyContent: "center" }}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
 
-  const MenuItem = ({ icon, title, onPress, isDanger = false }: any) => (
-    <TouchableOpacity style={localStyles.menuItem} onPress={onPress}>
-      <View style={localStyles.menuItemLeft}>
-        <Ionicons
-          name={icon}
-          size={24}
-          color={isDanger ? COLORS.danger : COLORS.primary}
-          style={localStyles.menuIcon}
-        />
-        <Text
-          style={[localStyles.menuText, isDanger && { color: COLORS.danger }]}
-        >
-          {title}
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
-    </TouchableOpacity>
-  );
-
   return (
-    <ScrollView contentContainerStyle={globalStyles.containerPadding}>
-      {/* Cabecera del Perfil */}
-      <View style={localStyles.headerContainer}>
-        <View style={localStyles.avatarPlaceholder}>
-          <Text style={localStyles.avatarText}>
-            {userData?.nombre?.charAt(0) || "U"}
+    <ScrollView style={{ backgroundColor: "#fff" }}>
+      <View style={localStyles.header}>
+        {userData?.photoURL ? (
+          <Image
+            source={{ uri: userData.photoURL }}
+            style={localStyles.avatar}
+          />
+        ) : (
+          <View
+            style={[
+              localStyles.avatar,
+              {
+                backgroundColor: "#eee",
+                justifyContent: "center",
+                alignItems: "center",
+              },
+            ]}
+          >
+            <Ionicons name="person" size={50} color="#ccc" />
+          </View>
+        )}
+        <Text style={localStyles.name}>{userData?.nombre}</Text>
+        <Text style={localStyles.sub}>{userData?.email}</Text>
+        <Text style={localStyles.faculty}>{userData?.facultad}</Text>
+      </View>
+
+      <View style={localStyles.statsContainer}>
+        <View style={localStyles.statBox}>
+          <Text style={localStyles.statNumber}>
+            ⭐ {userData?.rating_promedio?.toFixed(1) || "0.0"}
           </Text>
+          <Text style={localStyles.statLabel}>Reputación</Text>
         </View>
-        <Text style={localStyles.nameText}>
-          {userData?.nombre || "Usuario UNSA"}
-        </Text>
-        <Text style={localStyles.emailText}>{currentUser?.email}</Text>
-        {userData?.facultad ? (
-          <Text style={localStyles.facultyText}>
-            <Ionicons name="school-outline" size={14} /> {userData.facultad}
+        <View style={localStyles.statBox}>
+          <Text style={localStyles.statNumber}>
+            {userData?.total_ventas || 0}
           </Text>
-        ) : null}
+          <Text style={localStyles.statLabel}>Ventas</Text>
+        </View>
       </View>
 
-      {/* Opciones del Dashboard */}
-      <View style={localStyles.section}>
-        <Text style={localStyles.sectionTitle}>Ventas</Text>
-        <MenuItem
-          icon="pricetags-outline"
-          title="Mis Publicaciones"
+      <View style={{ padding: SPACING.xl }}>
+        {/* BOTÓN PARA CAMBIAR FOTO Y DATOS */}
+        <TouchableOpacity
+          style={[
+            globalStyles.primaryButton,
+            {
+              marginBottom: 15,
+              flexDirection: "row",
+              justifyContent: "center",
+            },
+          ]}
+          onPress={() => navigation.navigate("EditProfile")}
+        >
+          <Ionicons
+            name="pencil"
+            size={20}
+            color="#fff"
+            style={{ marginRight: 10 }}
+          />
+          <Text style={globalStyles.primaryButtonText}>
+            Editar Perfil y Foto
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            globalStyles.primaryButton,
+            { backgroundColor: COLORS.secondary, marginBottom: 15 },
+          ]}
           onPress={() => navigation.navigate("MisAnuncios")}
-        />
-      </View>
+        >
+          <Text style={globalStyles.primaryButtonText}>Mis Ventas Activas</Text>
+        </TouchableOpacity>
 
-      <View style={localStyles.section}>
-        <Text style={localStyles.sectionTitle}>Cuenta</Text>
-        <MenuItem
-          icon="bag-check-outline"
-          title="Mis Compras"
+        <TouchableOpacity
+          style={[
+            globalStyles.primaryButton,
+            { backgroundColor: COLORS.secondary, marginBottom: 30 },
+          ]}
           onPress={() => navigation.navigate("MisCompras")}
-        />
-        <MenuItem
-          icon="person-outline"
-          title="Editar Perfil"
-          onPress={() => navigation.navigate("EditProfile", { userData })}
-        />
-        <MenuItem
-          icon="log-out-outline"
-          title="Cerrar Sesión"
-          isDanger={true}
+        >
+          <Text style={globalStyles.primaryButtonText}>
+            Mis Compras (Recibos)
+          </Text>
+        </TouchableOpacity>
+
+        {/* BOTÓN DE CERRAR SESIÓN */}
+        <TouchableOpacity
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 15,
+          }}
           onPress={() => signOut(auth)}
-        />
+        >
+          <Ionicons
+            name="log-out-outline"
+            size={24}
+            color={COLORS.danger}
+            style={{ marginRight: 10 }}
+          />
+          <Text
+            style={{ color: COLORS.danger, fontWeight: "bold", fontSize: 16 }}
+          >
+            Cerrar Sesión
+          </Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
 }
 
 const localStyles = StyleSheet.create({
-  headerContainer: {
+  header: {
     alignItems: "center",
-    marginBottom: SPACING.xl,
-    paddingVertical: SPACING.lg,
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    paddingVertical: 40,
+    backgroundColor: "#f9f9f9",
+    borderBottomWidth: 1,
+    borderColor: "#eee",
   },
-  avatarPlaceholder: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: COLORS.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: SPACING.md,
-  },
-  avatarText: { color: COLORS.surface, fontSize: 36, fontWeight: "bold" },
-  nameText: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  emailText: { color: COLORS.textMuted, fontSize: 14, marginBottom: 8 },
-  facultyText: {
-    color: COLORS.primary,
-    fontSize: 14,
-    fontWeight: "500",
-    backgroundColor: "#f0e6ea",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  section: { marginBottom: SPACING.lg },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: COLORS.textMuted,
-    marginBottom: SPACING.sm,
-    paddingLeft: SPACING.xs,
-  },
-  menuItem: {
+  avatar: { width: 120, height: 120, borderRadius: 60, marginBottom: 15 },
+  name: { fontSize: 24, fontWeight: "bold", color: COLORS.text },
+  sub: { fontSize: 14, color: COLORS.textMuted, marginBottom: 5 },
+  faculty: { fontSize: 14, color: COLORS.primary, fontWeight: "600" },
+  statsContainer: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: COLORS.surface,
-    padding: SPACING.md,
-    borderRadius: 10,
-    marginBottom: SPACING.sm,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
   },
-  menuItemLeft: { flexDirection: "row", alignItems: "center" },
-  menuIcon: { marginRight: SPACING.md },
-  menuText: { fontSize: 16, fontWeight: "500", color: COLORS.text },
+  statBox: {
+    flex: 1,
+    alignItems: "center",
+    borderRightWidth: 1,
+    borderColor: "#eee",
+  },
+  statNumber: { fontSize: 20, fontWeight: "bold", color: COLORS.text },
+  statLabel: { fontSize: 12, color: COLORS.textLight, marginTop: 5 },
 });
