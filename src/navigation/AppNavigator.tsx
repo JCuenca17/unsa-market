@@ -12,6 +12,9 @@ import HomeScreen from "../screens/HomeScreen";
 import CreateListingScreen from "../screens/CreateListingScreen";
 import ListingDetailScreen from "../screens/ListingDetailScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import MyListingsScreen from "../screens/MyListingsScreen";
+import EditListingScreen from "../screens/EditListingScreen";
+import EditProfileScreen from "../screens/EditProfileScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -61,6 +64,21 @@ export default function AppNavigator() {
             name="ListingDetail"
             component={ListingDetailScreen}
             options={{ title: "Detalles del Anuncio" }}
+          />
+          <Stack.Screen
+            name="MisAnuncios"
+            component={MyListingsScreen}
+            options={{ title: "Mis Publicaciones" }}
+          />
+          <Stack.Screen
+            name="EditProfile"
+            component={EditProfileScreen}
+            options={{ title: "Editar Perfil" }}
+          />
+          <Stack.Screen
+            name="EditListing"
+            component={EditListingScreen}
+            options={{ title: "Editar Anuncio" }}
           />
         </Stack.Navigator>
       ) : (

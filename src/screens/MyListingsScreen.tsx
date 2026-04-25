@@ -19,6 +19,7 @@ import {
   deleteDoc,
   doc,
 } from "firebase/firestore";
+import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
@@ -26,10 +27,13 @@ interface Listing {
   id: string;
   titulo: string;
   precio: number;
+  descripcion: string;
+  categoria: string;
+  tipo: string;
   imagenes?: string[];
 }
 
-export default function MyListingsScreen() {
+export default function MyListingsScreen({ navigation }: any) {
   const [myListings, setMyListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -63,7 +67,7 @@ export default function MyListingsScreen() {
   const confirmDelete = (id: string) => {
     Alert.alert(
       "Eliminar Anuncio",
-      "¿Estás seguro? Esta acción no se puede deshacer.",
+      "¿Estás seguro? Esta acción borrará el anuncio de la tienda.",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -78,7 +82,6 @@ export default function MyListingsScreen() {
   const handleDelete = async (id: string) => {
     try {
       await deleteDoc(doc(db, "listings", id));
-      Alert.alert("Éxito", "El anuncio ha sido eliminado.");
       fetchMyListings();
     } catch (error) {
       Alert.alert("Error", "No se pudo eliminar el anuncio.");
@@ -102,12 +105,22 @@ export default function MyListingsScreen() {
         </Text>
         <Text style={localStyles.price}>S/ {item.precio.toFixed(2)}</Text>
       </View>
-      <TouchableOpacity
-        style={localStyles.deleteButton}
-        onPress={() => confirmDelete(item.id)}
-      >
-        <Text style={localStyles.deleteText}>Eliminar</Text>
-      </TouchableOpacity>
+      <View style={localStyles.actionContainer}>
+        {/* Botón de Editar con Icono */}
+        <TouchableOpacity
+          style={localStyles.editIconButton}
+          onPress={() => navigation.navigate("EditListing", { item })}
+        >
+          <Ionicons name="pencil-outline" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
+        {/* Botón de Eliminar con Icono */}
+        <TouchableOpacity
+          style={localStyles.deleteIconButton}
+          onPress={() => confirmDelete(item.id)}
+        >
+          <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -152,14 +165,19 @@ const localStyles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: COLORS.border,
   },
-  info: { flex: 1, marginLeft: 15 },
+  info: { flex: 1, marginLeft: 15, marginRight: 10 },
   title: { fontSize: 16, fontWeight: "bold", color: COLORS.text },
   price: { fontSize: 14, color: COLORS.primary, marginTop: 2 },
-  deleteButton: {
-    backgroundColor: COLORS.dangerLight,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 5,
+  actionContainer: { flexDirection: "row", alignItems: "center" },
+  editIconButton: {
+    padding: SPACING.xs,
+    marginRight: SPACING.xs,
+    backgroundColor: "#f0e6ea",
+    borderRadius: 8,
   },
-  deleteText: { color: COLORS.danger, fontWeight: "bold", fontSize: 13 },
+  deleteIconButton: {
+    padding: SPACING.xs,
+    backgroundColor: COLORS.dangerLight,
+    borderRadius: 8,
+  },
 });

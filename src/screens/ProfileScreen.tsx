@@ -1,72 +1,44 @@
 // src/screens/ProfileScreen.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   ScrollView,
-  Keyboard,
-  TouchableWithoutFeedback,
 } from "react-native";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { useFocusEffect } from "@react-navigation/native";
+import { doc, getDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
+import { Ionicons } from "@expo/vector-icons"; // Librería profesional de iconos
 import { db, auth } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
-export default function ProfileScreen() {
-  const [nombre, setNombre] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
-  const [facultad, setFacultad] = useState("");
+export default function ProfileScreen({ navigation }: any) {
+  const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
   const currentUser = auth.currentUser;
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (!currentUser) return;
-      try {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setNombre(data.nombre || "");
-          setWhatsapp(data.whatsapp || "");
-          setFacultad(data.facultad || "");
+  // Usamos useFocusEffect para que los datos se actualicen si volvemos de editar el perfil
+  useFocusEffect(
+    useCallback(() => {
+      const fetchUserData = async () => {
+        if (!currentUser) return;
+        try {
+          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+          if (userDoc.exists()) {
+            setUserData(userDoc.data());
+          }
+        } catch (error) {
+          console.error("Error al obtener perfil:", error);
+        } finally {
+          setLoading(false);
         }
-      } catch (error) {
-        console.error("Error al obtener perfil:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUserData();
-  }, []);
-
-  const handleUpdate = async () => {
-    if (!nombre || !whatsapp) {
-      Alert.alert(
-        "Campos obligatorios",
-        "El nombre y WhatsApp son necesarios.",
-      );
-      return;
-    }
-    setUpdating(true);
-    try {
-      await updateDoc(doc(db, "users", currentUser!.uid), {
-        nombre: nombre.trim(),
-        whatsapp: whatsapp.trim(),
-        facultad: facultad.trim(),
-      });
-      Alert.alert("Éxito", "Perfil actualizado correctamente.");
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
-    } finally {
-      setUpdating(false);
-    }
-  };
+      };
+      fetchUserData();
+    }, [currentUser]),
+  );
 
   if (loading)
     return (
@@ -75,83 +47,133 @@ export default function ProfileScreen() {
       </View>
     );
 
+  const MenuItem = ({ icon, title, onPress, isDanger = false }: any) => (
+    <TouchableOpacity style={localStyles.menuItem} onPress={onPress}>
+      <View style={localStyles.menuItemLeft}>
+        <Ionicons
+          name={icon}
+          size={24}
+          color={isDanger ? COLORS.danger : COLORS.primary}
+          style={localStyles.menuIcon}
+        />
+        <Text
+          style={[localStyles.menuText, isDanger && { color: COLORS.danger }]}
+        >
+          {title}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
+    </TouchableOpacity>
+  );
+
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ScrollView contentContainerStyle={globalStyles.containerPadding}>
-        <View style={localStyles.avatarContainer}>
-          <View style={localStyles.avatarPlaceholder}>
-            <Text style={localStyles.avatarText}>
-              {nombre.charAt(0) || "U"}
-            </Text>
-          </View>
-          <Text style={localStyles.emailText}>{currentUser?.email}</Text>
+    <ScrollView contentContainerStyle={globalStyles.containerPadding}>
+      {/* Cabecera del Perfil */}
+      <View style={localStyles.headerContainer}>
+        <View style={localStyles.avatarPlaceholder}>
+          <Text style={localStyles.avatarText}>
+            {userData?.nombre?.charAt(0) || "U"}
+          </Text>
         </View>
+        <Text style={localStyles.nameText}>
+          {userData?.nombre || "Usuario UNSA"}
+        </Text>
+        <Text style={localStyles.emailText}>{currentUser?.email}</Text>
+        {userData?.facultad ? (
+          <Text style={localStyles.facultyText}>
+            <Ionicons name="school-outline" size={14} /> {userData.facultad}
+          </Text>
+        ) : null}
+      </View>
 
-        <Text style={globalStyles.label}>Nombre Completo</Text>
-        <TextInput
-          style={globalStyles.input}
-          value={nombre}
-          onChangeText={setNombre}
-          placeholder="Ej. Juan Perez"
+      {/* Opciones del Dashboard */}
+      <View style={localStyles.section}>
+        <Text style={localStyles.sectionTitle}>Ventas</Text>
+        <MenuItem
+          icon="pricetags-outline"
+          title="Mis Publicaciones"
+          onPress={() => navigation.navigate("MisAnuncios")}
         />
+      </View>
 
-        <Text style={globalStyles.label}>WhatsApp (Sin el +51)</Text>
-        <TextInput
-          style={globalStyles.input}
-          value={whatsapp}
-          onChangeText={setWhatsapp}
-          placeholder="987654321"
-          keyboardType="phone-pad"
+      <View style={localStyles.section}>
+        <Text style={localStyles.sectionTitle}>Cuenta</Text>
+        <MenuItem
+          icon="person-outline"
+          title="Editar Perfil"
+          onPress={() => navigation.navigate("EditProfile", { userData })}
         />
-
-        <Text style={globalStyles.label}>Facultad / Escuela</Text>
-        <TextInput
-          style={globalStyles.input}
-          value={facultad}
-          onChangeText={setFacultad}
-          placeholder="Ej. Ingeniería de Sistemas"
-        />
-
-        <TouchableOpacity
-          style={globalStyles.primaryButton}
-          onPress={handleUpdate}
-          disabled={updating}
-        >
-          {updating ? (
-            <ActivityIndicator color={COLORS.surface} />
-          ) : (
-            <Text style={globalStyles.primaryButtonText}>Guardar Cambios</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={localStyles.logoutButton}
+        <MenuItem
+          icon="log-out-outline"
+          title="Cerrar Sesión"
+          isDanger={true}
           onPress={() => signOut(auth)}
-        >
-          <Text style={localStyles.logoutButtonText}>Cerrar Sesión</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </TouchableWithoutFeedback>
+        />
+      </View>
+    </ScrollView>
   );
 }
 
 const localStyles = StyleSheet.create({
-  avatarContainer: { alignItems: "center", marginBottom: SPACING.xl },
+  headerContainer: {
+    alignItems: "center",
+    marginBottom: SPACING.xl,
+    paddingVertical: SPACING.lg,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
   avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: SPACING.md,
+  },
+  avatarText: { color: COLORS.surface, fontSize: 36, fontWeight: "bold" },
+  nameText: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  emailText: { color: COLORS.textMuted, fontSize: 14, marginBottom: 8 },
+  facultyText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: "500",
+    backgroundColor: "#f0e6ea",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  section: { marginBottom: SPACING.lg },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.textMuted,
     marginBottom: SPACING.sm,
+    paddingLeft: SPACING.xs,
   },
-  avatarText: { color: COLORS.surface, fontSize: 32, fontWeight: "bold" },
-  emailText: { color: COLORS.textMuted, fontSize: 14 },
-  logoutButton: {
-    padding: SPACING.md,
+  menuItem: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: SPACING.sm,
+    justifyContent: "space-between",
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    borderRadius: 10,
+    marginBottom: SPACING.sm,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
-  logoutButtonText: { color: COLORS.danger, fontWeight: "bold" },
+  menuItemLeft: { flexDirection: "row", alignItems: "center" },
+  menuIcon: { marginRight: SPACING.md },
+  menuText: { fontSize: 16, fontWeight: "500", color: COLORS.text },
 });
