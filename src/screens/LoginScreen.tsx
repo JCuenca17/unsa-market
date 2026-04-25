@@ -10,6 +10,9 @@ import {
   StyleSheet,
   Keyboard,
   TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import {
   createUserWithEmailAndPassword,
@@ -28,17 +31,14 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Control de visibilidad de contraseñas
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  // NUEVA FUNCIÓN: Recuperación de contraseña
   const handleForgotPassword = async () => {
     const cleanEmail = email.trim().toLowerCase();
-
     if (!cleanEmail) {
       Alert.alert(
         "Correo necesario",
@@ -46,7 +46,6 @@ export default function LoginScreen() {
       );
       return;
     }
-
     if (!cleanEmail.endsWith("@unsa.edu.pe")) {
       Alert.alert(
         "Correo inválido",
@@ -54,7 +53,6 @@ export default function LoginScreen() {
       );
       return;
     }
-
     try {
       await sendPasswordResetEmail(auth, cleanEmail);
       Alert.alert(
@@ -62,7 +60,6 @@ export default function LoginScreen() {
         "Si el correo está registrado, recibirás un enlace para restablecer tu contraseña. Revisa también tu carpeta de SPAM.",
       );
     } catch (error: any) {
-      // Por seguridad, Firebase recomienda no especificar si el correo existe o no en recuperación
       Alert.alert(
         "Aviso",
         "Se ha procesado tu solicitud. Si el correo existe en nuestro sistema, recibirás las instrucciones.",
@@ -80,7 +77,6 @@ export default function LoginScreen() {
       );
       return;
     }
-
     if (!cleanEmail.endsWith("@unsa.edu.pe")) {
       Alert.alert(
         "Acceso Restringido",
@@ -97,7 +93,6 @@ export default function LoginScreen() {
         );
         return;
       }
-
       const passwordRegex =
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,}$/;
       if (!passwordRegex.test(password)) {
@@ -178,7 +173,6 @@ export default function LoginScreen() {
           "¡Registro completado!",
           "Solo falta un paso. Hemos enviado un enlace de confirmación a tu correo institucional. Ábrelo para activar tu cuenta.",
         );
-
         setIsLogin(true);
         setPassword("");
         setConfirmPassword("");
@@ -213,160 +207,183 @@ export default function LoginScreen() {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={localStyles.mainContainer}>
-        <View style={localStyles.logoSection}>
-          <Ionicons name="shield-checkmark" size={80} color={COLORS.primary} />
-          <Text style={localStyles.appName}>UNSA Market</Text>
-          <Text style={localStyles.tagline}>
-            Acceso seguro para la comunidad universitaria.
-          </Text>
-        </View>
-
-        <View style={localStyles.formContainer}>
-          <Text style={globalStyles.label}>
-            Correo Electrónico Institucional
-          </Text>
-          <TextInput
-            style={globalStyles.input}
-            placeholder="ejemplo@unsa.edu.pe"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-
-          <Text style={globalStyles.label}>Contraseña</Text>
-          <View style={localStyles.inputWrapper}>
-            <TextInput
-              style={[
-                globalStyles.input,
-                { paddingRight: 50, marginBottom: isLogin ? SPACING.xs : 5 },
-              ]}
-              placeholder={
-                isLogin ? "Tu contraseña" : "Crea una contraseña robusta"
-              }
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity
-              style={localStyles.eyeIcon}
-              onPress={() => setShowPassword(!showPassword)}
-            >
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1 }}
+    >
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={localStyles.mainContainer}>
+            <View style={localStyles.logoSection}>
               <Ionicons
-                name={showPassword ? "eye-off" : "eye"}
-                size={22}
-                color={COLORS.textMuted}
+                name="shield-checkmark"
+                size={80}
+                color={COLORS.primary}
               />
-            </TouchableOpacity>
-          </View>
-
-          {/* Botón de Olvidé mi contraseña (Solo visible en Iniciar Sesión) */}
-          {isLogin && (
-            <TouchableOpacity
-              onPress={handleForgotPassword}
-              style={localStyles.forgotPasswordButton}
-            >
-              <Text style={localStyles.forgotPasswordText}>
-                ¿Olvidaste tu contraseña?
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Instrucciones de seguridad detalladas (Solo visibles en registro) */}
-          {!isLogin && (
-            <View style={localStyles.requirementsContainer}>
-              <Text style={localStyles.requirementText}>
-                Requisitos obligatorios:
-              </Text>
-              <Text style={localStyles.requirementItem}>
-                • Mínimo 8 caracteres de longitud.
-              </Text>
-              <Text style={localStyles.requirementItem}>
-                • Al menos una letra{" "}
-                <Text style={{ fontWeight: "bold" }}>mayúscula</Text> y una{" "}
-                <Text style={{ fontWeight: "bold" }}>minúscula</Text>.
-              </Text>
-              <Text style={localStyles.requirementItem}>
-                • Al menos un <Text style={{ fontWeight: "bold" }}>número</Text>
-                .
-              </Text>
-              <Text style={localStyles.requirementItem}>
-                • Al menos un{" "}
-                <Text style={{ fontWeight: "bold" }}>símbolo</Text> (ej. @, $,
-                !, %, *, ?, &).
+              <Text style={localStyles.appName}>UNSA Market</Text>
+              <Text style={localStyles.tagline}>
+                Acceso seguro para la comunidad universitaria.
               </Text>
             </View>
-          )}
 
-          {!isLogin && (
-            <>
-              <Text style={globalStyles.label}>Confirmar Contraseña</Text>
-              <View style={localStyles.inputWrapper}>
+            <View style={localStyles.formContainer}>
+              <Text style={globalStyles.label}>
+                Correo Electrónico Institucional
+              </Text>
+              <TextInput
+                style={globalStyles.input}
+                placeholder="ejemplo@unsa.edu.pe"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <Text style={globalStyles.label}>Contraseña</Text>
+              {/* Hemos movido el margin-bottom al contenedor para no descuadrar el ícono */}
+              <View
+                style={[
+                  localStyles.inputWrapper,
+                  { marginBottom: isLogin ? SPACING.xs : 5 },
+                ]}
+              >
                 <TextInput
-                  style={[globalStyles.input, { paddingRight: 50 }]}
-                  placeholder="Repite tu contraseña exactamente igual"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  secureTextEntry={!showConfirmPassword}
+                  style={[
+                    globalStyles.input,
+                    { paddingRight: 50, marginBottom: 0 },
+                  ]}
+                  placeholder={
+                    isLogin ? "Tu contraseña" : "Crea una contraseña robusta"
+                  }
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
                 />
                 <TouchableOpacity
                   style={localStyles.eyeIcon}
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  onPress={() => setShowPassword(!showPassword)}
                 >
                   <Ionicons
-                    name={showConfirmPassword ? "eye-off" : "eye"}
+                    name={showPassword ? "eye-off" : "eye"}
                     size={22}
                     color={COLORS.textMuted}
                   />
                 </TouchableOpacity>
               </View>
-            </>
-          )}
 
-          <TouchableOpacity
-            style={[
-              globalStyles.primaryButton,
-              { marginTop: isLogin ? 15 : 25 },
-            ]}
-            onPress={handleAuth}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={globalStyles.primaryButtonText}>
-                {isLogin ? "Ingresar al Marketplace" : "Registrarme"}
-              </Text>
-            )}
-          </TouchableOpacity>
+              {isLogin && (
+                <TouchableOpacity
+                  onPress={handleForgotPassword}
+                  style={localStyles.forgotPasswordButton}
+                >
+                  <Text style={localStyles.forgotPasswordText}>
+                    ¿Olvidaste tu contraseña?
+                  </Text>
+                </TouchableOpacity>
+              )}
 
-          <TouchableOpacity
-            onPress={() => {
-              setIsLogin(!isLogin);
-              setPassword("");
-              setConfirmPassword("");
-              setShowPassword(false);
-              setShowConfirmPassword(false);
-            }}
-            style={{ marginTop: 25, alignItems: "center" }}
-          >
-            <Text
-              style={{
-                color: COLORS.primary,
-                fontWeight: "bold",
-                fontSize: 15,
-              }}
-            >
-              {isLogin
-                ? "¿Nuevo en UNSA Market? Crea tu cuenta"
-                : "¿Ya eres miembro? Inicia sesión"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableWithoutFeedback>
+              {!isLogin && (
+                <View style={localStyles.requirementsContainer}>
+                  <Text style={localStyles.requirementText}>
+                    Requisitos obligatorios:
+                  </Text>
+                  <Text style={localStyles.requirementItem}>
+                    • Mínimo 8 caracteres de longitud.
+                  </Text>
+                  <Text style={localStyles.requirementItem}>
+                    • Al menos una letra{" "}
+                    <Text style={{ fontWeight: "bold" }}>mayúscula</Text> y una{" "}
+                    <Text style={{ fontWeight: "bold" }}>minúscula</Text>.
+                  </Text>
+                  <Text style={localStyles.requirementItem}>
+                    • Al menos un{" "}
+                    <Text style={{ fontWeight: "bold" }}>número</Text>.
+                  </Text>
+                  <Text style={localStyles.requirementItem}>
+                    • Al menos un{" "}
+                    <Text style={{ fontWeight: "bold" }}>símbolo</Text> (ej. @,
+                    $, !, %, *, ?, &).
+                  </Text>
+                </View>
+              )}
+
+              {!isLogin && (
+                <>
+                  <Text style={globalStyles.label}>Confirmar Contraseña</Text>
+                  <View style={localStyles.inputWrapper}>
+                    <TextInput
+                      style={[
+                        globalStyles.input,
+                        { paddingRight: 50, marginBottom: 0 },
+                      ]}
+                      placeholder="Repite tu contraseña exactamente igual"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      secureTextEntry={!showConfirmPassword}
+                    />
+                    <TouchableOpacity
+                      style={localStyles.eyeIcon}
+                      onPress={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
+                    >
+                      <Ionicons
+                        name={showConfirmPassword ? "eye-off" : "eye"}
+                        size={22}
+                        color={COLORS.textMuted}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  globalStyles.primaryButton,
+                  { marginTop: isLogin ? 15 : 25 },
+                ]}
+                onPress={handleAuth}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={globalStyles.primaryButtonText}>
+                    {isLogin ? "Ingresar al Marketplace" : "Registrarme"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setIsLogin(!isLogin);
+                  setPassword("");
+                  setConfirmPassword("");
+                  setShowPassword(false);
+                  setShowConfirmPassword(false);
+                }}
+                style={{ marginTop: 25, alignItems: "center" }}
+              >
+                <Text
+                  style={{
+                    color: COLORS.primary,
+                    fontWeight: "bold",
+                    fontSize: 15,
+                  }}
+                >
+                  {isLogin
+                    ? "¿Nuevo en UNSA Market? Crea tu cuenta"
+                    : "¿Ya eres miembro? Inicia sesión"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -392,10 +409,7 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   formContainer: { width: "100%" },
-  inputWrapper: {
-    position: "relative",
-    justifyContent: "center",
-  },
+  inputWrapper: { position: "relative", justifyContent: "center" },
   eyeIcon: {
     position: "absolute",
     right: 15,

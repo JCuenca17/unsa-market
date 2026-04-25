@@ -10,6 +10,10 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  Modal,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { doc, updateDoc } from "firebase/firestore";
 import * as ImagePicker from "expo-image-picker";
@@ -17,16 +21,47 @@ import { Ionicons } from "@expo/vector-icons";
 import { db } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
+const CATEGORIAS = [
+  "Libros",
+  "Tecnología",
+  "Alimentos",
+  "Tutorías",
+  "Inmuebles",
+  "Servicios",
+  "Otros",
+];
+const TIPOS = ["Producto", "Servicio"];
+const MODALIDADES = ["Única vez (Un solo artículo)", "Múltiples / Continuo"];
+
 export default function EditListingScreen({ route, navigation }: any) {
   const { listing } = route.params;
 
   const [titulo, setTitulo] = useState(listing.titulo);
   const [precio, setPrecio] = useState(listing.precio.toString());
   const [descripcion, setDescripcion] = useState(listing.descripcion || "");
+
+  const [tipo, setTipo] = useState(
+    listing.tipo
+      ? listing.tipo.toLowerCase() === "servicio"
+        ? "Servicio"
+        : "Producto"
+      : "Producto",
+  );
+  const [categoria, setCategoria] = useState(listing.categoria || "");
+  const [modalidad, setModalidad] = useState(
+    listing.modalidad === "unica"
+      ? "Única vez (Un solo artículo)"
+      : "Múltiples / Continuo",
+  );
+
   const [imagenesBase64, setImagenesBase64] = useState<string[]>(
     listing.imagenes || [],
   );
   const [loading, setLoading] = useState(false);
+
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [typeModalVisible, setTypeModalVisible] = useState(false);
+  const [modalidadModalVisible, setModalidadModalVisible] = useState(false);
 
   const pickImage = async () => {
     if (imagenesBase64.length >= 5) {
@@ -55,10 +90,15 @@ export default function EditListingScreen({ route, navigation }: any) {
   };
 
   const handleUpdate = async () => {
-    if (!titulo.trim() || !precio.trim() || imagenesBase64.length === 0) {
+    if (
+      !titulo.trim() ||
+      !precio.trim() ||
+      !categoria ||
+      imagenesBase64.length === 0
+    ) {
       Alert.alert(
         "Campos incompletos",
-        "El título, el precio y al menos una foto son obligatorios.",
+        "El título, el precio, la categoría y al menos una foto son obligatorios.",
       );
       return;
     }
@@ -68,6 +108,9 @@ export default function EditListingScreen({ route, navigation }: any) {
         titulo: titulo.trim(),
         precio: parseFloat(precio),
         descripcion: descripcion.trim(),
+        tipo: tipo.toLowerCase(),
+        categoria: categoria.trim(),
+        modalidad: modalidad.includes("Única") ? "unica" : "multiple",
         imagenes: imagenesBase64,
       });
       Alert.alert("¡Éxito!", "Tu publicación ha sido actualizada.");
@@ -79,71 +122,208 @@ export default function EditListingScreen({ route, navigation }: any) {
     }
   };
 
-  return (
-    <ScrollView
-      contentContainerStyle={globalStyles.containerPadding}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={globalStyles.label}>
-        Fotos ({imagenesBase64.length}/5) *
-      </Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={localStyles.imageScroll}
-      >
-        <TouchableOpacity style={localStyles.addCard} onPress={pickImage}>
-          <Ionicons name="camera-outline" size={30} color={COLORS.textLight} />
-        </TouchableOpacity>
-        {imagenesBase64.map((uri, index) => (
-          <View key={index} style={localStyles.imageWrapper}>
-            <Image source={{ uri }} style={localStyles.thumbnail} />
-            <TouchableOpacity
-              style={localStyles.removeBadge}
-              onPress={() => removeImage(index)}
-            >
-              <Ionicons name="close" size={14} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </ScrollView>
-
-      <Text style={globalStyles.label}>Título *</Text>
-      <TextInput
-        style={globalStyles.input}
-        value={titulo}
-        onChangeText={setTitulo}
-      />
-
-      <Text style={globalStyles.label}>Precio (S/) *</Text>
-      <TextInput
-        style={globalStyles.input}
-        value={precio}
-        onChangeText={setPrecio}
-        keyboardType="numeric"
-      />
-
-      <Text style={globalStyles.label}>Descripción</Text>
-      <TextInput
-        style={[globalStyles.input, localStyles.textArea]}
-        multiline
-        numberOfLines={5}
-        value={descripcion}
-        onChangeText={setDescripcion}
-      />
-
-      <TouchableOpacity
-        style={[globalStyles.primaryButton, { marginTop: SPACING.lg }]}
-        onPress={handleUpdate}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={globalStyles.primaryButtonText}>Guardar Cambios</Text>
-        )}
+  const SelectorField = ({ label, value, onPress }: any) => (
+    <View style={{ marginBottom: SPACING.md }}>
+      <Text style={globalStyles.label}>{label} *</Text>
+      <TouchableOpacity style={localStyles.selectorInput} onPress={onPress}>
+        <Text
+          style={{
+            color: value ? COLORS.text : COLORS.textLight,
+            fontSize: 16,
+          }}
+        >
+          {value || "Seleccionar..."}
+        </Text>
+        <Ionicons name="chevron-down" size={20} color={COLORS.textLight} />
       </TouchableOpacity>
-    </ScrollView>
+    </View>
+  );
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+      style={{ flex: 1, backgroundColor: "#fff" }}
+    >
+      <ScrollView
+        contentContainerStyle={[
+          globalStyles.containerPadding,
+          { paddingBottom: 60 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={globalStyles.label}>
+          Fotos ({imagenesBase64.length}/5) *
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={localStyles.imageScroll}
+        >
+          <TouchableOpacity style={localStyles.addCard} onPress={pickImage}>
+            <Ionicons
+              name="camera-outline"
+              size={30}
+              color={COLORS.textLight}
+            />
+          </TouchableOpacity>
+          {imagenesBase64.map((uri, index) => (
+            <View key={index} style={localStyles.imageWrapper}>
+              <Image source={{ uri }} style={localStyles.thumbnail} />
+              <TouchableOpacity
+                style={localStyles.removeBadge}
+                onPress={() => removeImage(index)}
+              >
+                <Ionicons name="close" size={14} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+
+        <Text style={globalStyles.label}>Título *</Text>
+        <TextInput
+          style={globalStyles.input}
+          value={titulo}
+          onChangeText={setTitulo}
+        />
+
+        <SelectorField
+          label="Tipo de Anuncio"
+          value={tipo}
+          onPress={() => setTypeModalVisible(true)}
+        />
+        <SelectorField
+          label="Categoría"
+          value={categoria}
+          onPress={() => setCategoryModalVisible(true)}
+        />
+        <SelectorField
+          label="Modalidad de Venta"
+          value={modalidad}
+          onPress={() => setModalidadModalVisible(true)}
+        />
+
+        <Text style={globalStyles.label}>Precio (S/) *</Text>
+        <TextInput
+          style={globalStyles.input}
+          value={precio}
+          onChangeText={setPrecio}
+          keyboardType="numeric"
+        />
+
+        <Text style={globalStyles.label}>Descripción</Text>
+        <TextInput
+          style={[globalStyles.input, localStyles.textArea]}
+          multiline
+          numberOfLines={5}
+          value={descripcion}
+          onChangeText={setDescripcion}
+        />
+
+        <TouchableOpacity
+          style={[globalStyles.primaryButton, { marginTop: SPACING.lg }]}
+          onPress={handleUpdate}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={globalStyles.primaryButtonText}>Guardar Cambios</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Modales */}
+        <Modal
+          visible={typeModalVisible}
+          transparent={true}
+          animationType="fade"
+        >
+          <TouchableOpacity
+            style={localStyles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setTypeModalVisible(false)}
+          >
+            <View style={localStyles.modalContentCenter}>
+              <Text style={localStyles.modalTitle}>Tipo de Anuncio</Text>
+              {TIPOS.map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  style={localStyles.modalOption}
+                  onPress={() => {
+                    setTipo(t);
+                    setTypeModalVisible(false);
+                  }}
+                >
+                  <Text style={localStyles.modalOptionText}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        <Modal
+          visible={categoryModalVisible}
+          transparent={true}
+          animationType="fade"
+        >
+          <TouchableOpacity
+            style={localStyles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setCategoryModalVisible(false)}
+          >
+            <View style={localStyles.modalContentCenter}>
+              <Text style={localStyles.modalTitle}>Seleccionar Categoría</Text>
+              <FlatList
+                data={CATEGORIAS}
+                keyExtractor={(item) => item}
+                style={{ maxHeight: 300 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={localStyles.modalOption}
+                    onPress={() => {
+                      setCategoria(item);
+                      setCategoryModalVisible(false);
+                    }}
+                  >
+                    <Text style={localStyles.modalOptionText}>{item}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        <Modal
+          visible={modalidadModalVisible}
+          transparent={true}
+          animationType="fade"
+        >
+          <TouchableOpacity
+            style={localStyles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setModalidadModalVisible(false)}
+          >
+            <View style={localStyles.modalContentCenter}>
+              <Text style={localStyles.modalTitle}>
+                ¿Cómo vas a vender esto?
+              </Text>
+              {MODALIDADES.map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={localStyles.modalOption}
+                  onPress={() => {
+                    setModalidad(m);
+                    setModalidadModalVisible(false);
+                  }}
+                >
+                  <Text style={localStyles.modalOptionText}>{m}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -182,5 +362,42 @@ const localStyles = StyleSheet.create({
     zIndex: 1,
     elevation: 2,
   },
+  selectorInput: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+    borderRadius: 8,
+  },
   textArea: { height: 120, textAlignVertical: "top" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SPACING.xl,
+  },
+  modalContentCenter: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 15,
+    width: "100%",
+    padding: SPACING.lg,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+    textAlign: "center",
+  },
+  modalOption: {
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.background,
+  },
+  modalOptionText: { fontSize: 16, color: COLORS.text, textAlign: "center" },
 });

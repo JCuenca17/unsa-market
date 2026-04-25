@@ -12,12 +12,13 @@ import {
   Image,
   Modal,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { collection, addDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
-import { db, auth, storage } from "../services/firebaseConfig";
+import { db, auth } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
 const CATEGORIAS = [
@@ -40,7 +41,7 @@ export default function CreateListingScreen({ navigation }: any) {
   const [categoria, setCategoria] = useState("");
   const [modalidad, setModalidad] = useState("Única vez (Un solo artículo)");
 
-  const [imageUris, setImageUris] = useState<string[]>([]);
+  const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
@@ -48,7 +49,7 @@ export default function CreateListingScreen({ navigation }: any) {
   const [modalidadModalVisible, setModalidadModalVisible] = useState(false);
 
   const pickImage = async () => {
-    if (imageUris.length >= 5) {
+    if (imagenesBase64.length >= 5) {
       Alert.alert("Límite alcanzado", "Puedes subir un máximo de 5 fotos.");
       return;
     }
@@ -56,30 +57,22 @@ export default function CreateListingScreen({ navigation }: any) {
       mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.5,
+      quality: 0.2,
+      base64: true,
     });
 
-    if (!result.canceled && result.assets[0].uri) {
-      setImageUris([...imageUris, result.assets[0].uri]);
+    if (!result.canceled && result.assets[0].base64) {
+      setImagenesBase64([
+        ...imagenesBase64,
+        `data:image/jpeg;base64,${result.assets[0].base64}`,
+      ]);
     }
   };
 
-  const uploadImagesAndGetUrls = async (userId: string) => {
-    const urls = [];
-    for (let i = 0; i < imageUris.length; i++) {
-      const uri = imageUris[i];
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const filename = uri.substring(uri.lastIndexOf("/") + 1);
-      const storageRef = ref(
-        storage,
-        `listings/${userId}/${Date.now()}_${filename}`,
-      );
-      await uploadBytes(storageRef, blob);
-      const downloadUrl = await getDownloadURL(storageRef);
-      urls.push(downloadUrl);
-    }
-    return urls;
+  const removeImage = (indexToRemove: number) => {
+    const newImages = [...imagenesBase64];
+    newImages.splice(indexToRemove, 1);
+    setImagenesBase64(newImages);
   };
 
   const handlePublish = async () => {
@@ -87,7 +80,7 @@ export default function CreateListingScreen({ navigation }: any) {
       !titulo.trim() ||
       !precio.trim() ||
       !categoria ||
-      imageUris.length === 0
+      imagenesBase64.length === 0
     ) {
       Alert.alert(
         "Campos incompletos",
@@ -101,8 +94,6 @@ export default function CreateListingScreen({ navigation }: any) {
 
     setLoading(true);
     try {
-      const uploadedImageUrls = await uploadImagesAndGetUrls(currentUser.uid);
-
       const listingData = {
         vendedor_id: currentUser.uid,
         titulo: titulo.trim(),
@@ -112,7 +103,7 @@ export default function CreateListingScreen({ navigation }: any) {
         categoria: categoria.trim(),
         modalidad: modalidad.includes("Única") ? "unica" : "multiple",
         estado: "activo",
-        imagenes: uploadedImageUrls,
+        imagenes: imagenesBase64,
         fecha_creacion: new Date().toISOString(),
       };
 
@@ -147,178 +138,193 @@ export default function CreateListingScreen({ navigation }: any) {
   );
 
   return (
-    <ScrollView
-      contentContainerStyle={globalStyles.containerPadding}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+      style={{ flex: 1, backgroundColor: "#fff" }}
     >
-      <Text style={globalStyles.label}>Fotos ({imageUris.length}/5) *</Text>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={localStyles.imageScroll}
+        contentContainerStyle={[
+          globalStyles.containerPadding,
+          { paddingBottom: 60 },
+        ]}
+        keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity style={localStyles.addCard} onPress={pickImage}>
-          <Ionicons name="camera-outline" size={30} color={COLORS.textLight} />
-        </TouchableOpacity>
-        {imageUris.map((uri, index) => (
-          <View key={index} style={localStyles.imageWrapper}>
-            <Image source={{ uri }} style={localStyles.thumbnail} />
-            <TouchableOpacity
-              style={localStyles.removeBadge}
-              onPress={() => {
-                const newImages = [...imageUris];
-                newImages.splice(index, 1);
-                setImageUris(newImages);
-              }}
-            >
-              <Ionicons name="close" size={14} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </ScrollView>
-
-      <Text style={globalStyles.label}>Título *</Text>
-      <TextInput
-        style={globalStyles.input}
-        value={titulo}
-        onChangeText={setTitulo}
-        placeholder="Ej. Libro de Cálculo Larson"
-      />
-
-      <SelectorField
-        label="Tipo de Anuncio"
-        value={tipo}
-        onPress={() => setTypeModalVisible(true)}
-      />
-      <SelectorField
-        label="Categoría"
-        value={categoria}
-        onPress={() => setCategoryModalVisible(true)}
-      />
-      <SelectorField
-        label="Modalidad de Venta"
-        value={modalidad}
-        onPress={() => setModalidadModalVisible(true)}
-      />
-
-      <Text style={globalStyles.label}>Precio (S/) *</Text>
-      <TextInput
-        style={globalStyles.input}
-        value={precio}
-        onChangeText={setPrecio}
-        placeholder="0.00"
-        keyboardType="numeric"
-      />
-
-      <Text style={globalStyles.label}>Descripción</Text>
-      <TextInput
-        style={[globalStyles.input, localStyles.textArea]}
-        value={descripcion}
-        onChangeText={setDescripcion}
-        placeholder="Agrega detalles como estado, entregas..."
-        multiline
-        numberOfLines={5}
-      />
-
-      <TouchableOpacity
-        style={[globalStyles.primaryButton, { marginTop: SPACING.lg }]}
-        onPress={handlePublish}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={globalStyles.primaryButtonText}>Publicar Anuncio</Text>
-        )}
-      </TouchableOpacity>
-
-      {/* Modal Tipo */}
-      <Modal visible={typeModalVisible} transparent={true} animationType="fade">
-        <TouchableOpacity
-          style={localStyles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setTypeModalVisible(false)}
+        <Text style={globalStyles.label}>
+          Fotos ({imagenesBase64.length}/5) *
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={localStyles.imageScroll}
         >
-          <View style={localStyles.modalContentCenter}>
-            <Text style={localStyles.modalTitle}>Tipo de Anuncio</Text>
-            {TIPOS.map((t) => (
+          <TouchableOpacity style={localStyles.addCard} onPress={pickImage}>
+            <Ionicons
+              name="camera-outline"
+              size={30}
+              color={COLORS.textLight}
+            />
+          </TouchableOpacity>
+          {imagenesBase64.map((uri, index) => (
+            <View key={index} style={localStyles.imageWrapper}>
+              <Image source={{ uri }} style={localStyles.thumbnail} />
               <TouchableOpacity
-                key={t}
-                style={localStyles.modalOption}
-                onPress={() => {
-                  setTipo(t);
-                  setTypeModalVisible(false);
-                }}
+                style={localStyles.removeBadge}
+                onPress={() => removeImage(index)}
               >
-                <Text style={localStyles.modalOptionText}>{t}</Text>
+                <Ionicons name="close" size={14} color="#fff" />
               </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+            </View>
+          ))}
+        </ScrollView>
 
-      {/* Modal Categoría */}
-      <Modal
-        visible={categoryModalVisible}
-        transparent={true}
-        animationType="fade"
-      >
+        <Text style={globalStyles.label}>Título *</Text>
+        <TextInput
+          style={globalStyles.input}
+          value={titulo}
+          onChangeText={setTitulo}
+          placeholder="Ej. Libro de Cálculo Larson"
+        />
+
+        <SelectorField
+          label="Tipo de Anuncio"
+          value={tipo}
+          onPress={() => setTypeModalVisible(true)}
+        />
+        <SelectorField
+          label="Categoría"
+          value={categoria}
+          onPress={() => setCategoryModalVisible(true)}
+        />
+        <SelectorField
+          label="Modalidad de Venta"
+          value={modalidad}
+          onPress={() => setModalidadModalVisible(true)}
+        />
+
+        <Text style={globalStyles.label}>Precio (S/) *</Text>
+        <TextInput
+          style={globalStyles.input}
+          value={precio}
+          onChangeText={setPrecio}
+          placeholder="0.00"
+          keyboardType="numeric"
+        />
+
+        <Text style={globalStyles.label}>Descripción</Text>
+        <TextInput
+          style={[globalStyles.input, localStyles.textArea]}
+          value={descripcion}
+          onChangeText={setDescripcion}
+          placeholder="Agrega detalles como estado, entregas..."
+          multiline
+          numberOfLines={5}
+        />
+
         <TouchableOpacity
-          style={localStyles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setCategoryModalVisible(false)}
+          style={[globalStyles.primaryButton, { marginTop: SPACING.lg }]}
+          onPress={handlePublish}
+          disabled={loading}
         >
-          <View style={localStyles.modalContentCenter}>
-            <Text style={localStyles.modalTitle}>Seleccionar Categoría</Text>
-            <FlatList
-              data={CATEGORIAS}
-              keyExtractor={(item) => item}
-              style={{ maxHeight: 300 }}
-              renderItem={({ item }) => (
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={globalStyles.primaryButtonText}>Publicar Anuncio</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Modales */}
+        <Modal
+          visible={typeModalVisible}
+          transparent={true}
+          animationType="fade"
+        >
+          <TouchableOpacity
+            style={localStyles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setTypeModalVisible(false)}
+          >
+            <View style={localStyles.modalContentCenter}>
+              <Text style={localStyles.modalTitle}>Tipo de Anuncio</Text>
+              {TIPOS.map((t) => (
                 <TouchableOpacity
+                  key={t}
                   style={localStyles.modalOption}
                   onPress={() => {
-                    setCategoria(item);
-                    setCategoryModalVisible(false);
+                    setTipo(t);
+                    setTypeModalVisible(false);
                   }}
                 >
-                  <Text style={localStyles.modalOptionText}>{item}</Text>
+                  <Text style={localStyles.modalOptionText}>{t}</Text>
                 </TouchableOpacity>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
-      {/* Modal Modalidad */}
-      <Modal
-        visible={modalidadModalVisible}
-        transparent={true}
-        animationType="fade"
-      >
-        <TouchableOpacity
-          style={localStyles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setModalidadModalVisible(false)}
+        <Modal
+          visible={categoryModalVisible}
+          transparent={true}
+          animationType="fade"
         >
-          <View style={localStyles.modalContentCenter}>
-            <Text style={localStyles.modalTitle}>¿Cómo vas a vender esto?</Text>
-            {MODALIDADES.map((m) => (
-              <TouchableOpacity
-                key={m}
-                style={localStyles.modalOption}
-                onPress={() => {
-                  setModalidad(m);
-                  setModalidadModalVisible(false);
-                }}
-              >
-                <Text style={localStyles.modalOptionText}>{m}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </ScrollView>
+          <TouchableOpacity
+            style={localStyles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setCategoryModalVisible(false)}
+          >
+            <View style={localStyles.modalContentCenter}>
+              <Text style={localStyles.modalTitle}>Seleccionar Categoría</Text>
+              <FlatList
+                data={CATEGORIAS}
+                keyExtractor={(item) => item}
+                style={{ maxHeight: 300 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={localStyles.modalOption}
+                    onPress={() => {
+                      setCategoria(item);
+                      setCategoryModalVisible(false);
+                    }}
+                  >
+                    <Text style={localStyles.modalOptionText}>{item}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        <Modal
+          visible={modalidadModalVisible}
+          transparent={true}
+          animationType="fade"
+        >
+          <TouchableOpacity
+            style={localStyles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setModalidadModalVisible(false)}
+          >
+            <View style={localStyles.modalContentCenter}>
+              <Text style={localStyles.modalTitle}>
+                ¿Cómo vas a vender esto?
+              </Text>
+              {MODALIDADES.map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={localStyles.modalOption}
+                  onPress={() => {
+                    setModalidad(m);
+                    setModalidadModalVisible(false);
+                  }}
+                >
+                  <Text style={localStyles.modalOptionText}>{m}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -337,7 +343,13 @@ const localStyles = StyleSheet.create({
     borderStyle: "dashed",
   },
   imageWrapper: { position: "relative", marginRight: SPACING.sm },
-  thumbnail: { width: 80, height: 80, borderRadius: 10 },
+  thumbnail: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#eee",
+  },
   removeBadge: {
     position: "absolute",
     top: -5,
