@@ -27,17 +27,14 @@ export default function ListingDetailScreen({ route, navigation }: any) {
   const [isInterested, setIsInterested] = useState(false);
 
   const currentUser = auth.currentUser;
+  const isOwner = currentUser?.uid === item.vendedor_id;
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const docSnap = await getDoc(doc(db, "users", item.vendedor_id));
         if (docSnap.exists()) setVendedor(docSnap.data());
-
-        // Verificar si ya estoy en la lista de interesados
-        if (item.interesados?.includes(currentUser?.uid)) {
-          setIsInterested(true);
-        }
+        if (item.interesados?.includes(currentUser?.uid)) setIsInterested(true);
       } catch (e) {
         console.log(e);
       } finally {
@@ -48,177 +45,191 @@ export default function ListingDetailScreen({ route, navigation }: any) {
   }, [item]);
 
   const handleInterest = async () => {
-    if (!currentUser) return;
+    if (isOwner) return; // Doble seguridad
     try {
       await updateDoc(doc(db, "listings", item.id), {
-        interesados: arrayUnion(currentUser.uid),
+        interesados: arrayUnion(currentUser?.uid),
       });
       setIsInterested(true);
       Alert.alert(
-        "Interés registrado",
-        "Ahora el vendedor puede confirmarte como comprador para que califiques la venta.",
+        "Interés enviado",
+        "El vendedor ya puede verte en su lista para confirmar la venta.",
       );
-
-      // Abrir WhatsApp automáticamente para iniciar el trato
-      const msg = `Hola ${vendedor.nombre}, me interesa tu anuncio "${item.titulo}" en UNSA Market.`;
       Linking.openURL(
-        `https://wa.me/51${vendedor.whatsapp}?text=${encodeURIComponent(msg)}`,
+        `https://wa.me/51${vendedor.whatsapp}?text=Hola, me interesa tu anuncio: ${item.titulo}`,
       );
     } catch (e) {
-      Alert.alert("Error", "No se pudo registrar tu interés.");
+      Alert.alert("Error", "No se pudo procesar.");
     }
   };
 
-  const handleScroll = (event: any) => {
-    const index = Math.round(event.nativeEvent.contentOffset.x / width);
-    setActiveImageIndex(index);
-  };
-
-  const isConfirmedBuyer =
-    item.estado === "vendido" && item.comprador_id === currentUser?.uid;
-
   return (
     <ScrollView style={globalStyles.container}>
-      <View style={localStyles.galleryContainer}>
+      {/* Galería Profesional */}
+      <View style={{ position: "relative" }}>
         <ScrollView
           horizontal
           pagingEnabled
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
           showsHorizontalScrollIndicator={false}
+          onScroll={(e) =>
+            setActiveImageIndex(
+              Math.round(e.nativeEvent.contentOffset.x / width),
+            )
+          }
         >
           {item.imagenes?.map((img: string, i: number) => (
             <Image
               key={i}
               source={{ uri: img }}
-              style={localStyles.mainImage}
+              style={{ width, height: 350, resizeMode: "cover" }}
             />
           ))}
         </ScrollView>
-        {item.imagenes?.length > 1 && (
-          <View style={localStyles.pagination}>
-            <Text style={localStyles.paginationText}>
-              {activeImageIndex + 1} / {item.imagenes.length}
-            </Text>
-          </View>
-        )}
+        <View style={localStyles.badgeContainer}>
+          <Text style={localStyles.badgeText}>
+            {activeImageIndex + 1} / {item.imagenes?.length}
+          </Text>
+        </View>
       </View>
 
-      <View style={localStyles.infoBox}>
-        <View style={localStyles.statusHeader}>
+      <View style={localStyles.content}>
+        <View style={localStyles.priceRow}>
           <Text style={localStyles.price}>S/ {item.precio.toFixed(2)}</Text>
-          {item.estado === "vendido" && (
-            <View style={localStyles.soldBadge}>
-              <Text style={localStyles.soldText}>VENDIDO</Text>
-            </View>
+          {item.tipo === "producto" && (
+            <Text style={localStyles.stockText}>
+              Stock: {item.stock > 0 ? item.stock : "Agotado"}
+            </Text>
           )}
         </View>
 
-        <Text style={localStyles.title}>{item.titulo}</Text>
+        {/* REPUTACIÓN DEL VENDEDOR (Detalle Real) */}
         <TouchableOpacity
+          style={localStyles.sellerBadge}
           onPress={() =>
             navigation.navigate("PublicProfile", {
               vendedorId: item.vendedor_id,
             })
           }
         >
-          <Text style={localStyles.sellerLink}>
-            <Ionicons name="person-circle-outline" />{" "}
-            {vendedor?.nombre || "Cargando..."}
-          </Text>
+          <View style={localStyles.avatarSmall}>
+            <Text style={{ color: "#fff", fontWeight: "bold" }}>
+              {vendedor?.nombre?.charAt(0)}
+            </Text>
+          </View>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={localStyles.sellerName}>{vendedor?.nombre}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons name="star" size={14} color="#FFD700" />
+              <Text style={localStyles.ratingText}>
+                {vendedor?.rating_promedio
+                  ? vendedor.rating_promedio.toFixed(1)
+                  : "Nuevo"}{" "}
+                • {vendedor?.total_ventas || 0} ventas
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
         </TouchableOpacity>
 
+        <Text style={localStyles.title}>{item.titulo}</Text>
         <View style={localStyles.divider} />
-        <Text style={localStyles.sectionLabel}>Descripción</Text>
+
+        <Text style={localStyles.labelTitle}>Descripción</Text>
         <Text style={localStyles.description}>
-          {item.descripcion || "Sin descripción adicional."}
+          {item.descripcion || "Sin descripción."}
         </Text>
 
-        {/* LÓGICA DE BOTONES DE ACCIÓN */}
-        {item.estado === "activo" ? (
+        {/* LÓGICA DE ACCIÓN PROFESIONAL */}
+        {isOwner ? (
+          <View style={localStyles.ownerBox}>
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color={COLORS.primary}
+            />
+            <Text style={localStyles.ownerText}>
+              Esta es tu publicación. Puedes gestionarla desde tu perfil.
+            </Text>
+          </View>
+        ) : item.estado === "activo" ? (
           <TouchableOpacity
             style={[
-              localStyles.actionButton,
+              localStyles.mainButton,
               isInterested && { backgroundColor: COLORS.textLight },
             ]}
             onPress={handleInterest}
             disabled={isInterested}
           >
             <Ionicons
-              name={
-                isInterested
-                  ? "checkmark-circle"
-                  : "chatbubble-ellipses-outline"
-              }
-              size={22}
+              name="chatbubble-outline"
+              size={20}
               color="#fff"
+              style={{ marginRight: 10 }}
             />
-            <Text style={localStyles.actionButtonText}>
-              {isInterested ? "Interés Enviado" : "Me Interesa / Contactar"}
+            <Text style={localStyles.mainButtonText}>
+              {isInterested ? "Interés Registrado" : "Contactar Vendedor"}
             </Text>
           </TouchableOpacity>
-        ) : isConfirmedBuyer && !item.resena_completada ? (
-          <TouchableOpacity
-            style={[localStyles.actionButton, { backgroundColor: "#FFD700" }]}
-            onPress={() => navigation.navigate("Calificar", { listing: item })}
+        ) : (
+          <View
+            style={[localStyles.mainButton, { backgroundColor: COLORS.danger }]}
           >
-            <Ionicons name="star" size={22} color="#333" />
-            <Text style={[localStyles.actionButtonText, { color: "#333" }]}>
-              Calificar esta Compra
-            </Text>
-          </TouchableOpacity>
-        ) : null}
+            <Text style={localStyles.mainButtonText}>ANUNCIO AGOTADO</Text>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
 }
 
 const localStyles = StyleSheet.create({
-  galleryContainer: { position: "relative" },
-  mainImage: { width: width, height: 320, resizeMode: "cover" },
-  pagination: {
-    position: "absolute",
-    bottom: 15,
-    right: 15,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  paginationText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
-  infoBox: { padding: SPACING.lg },
-  statusHeader: {
+  content: { padding: SPACING.lg },
+  priceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 5,
+    marginBottom: 15,
   },
-  price: { fontSize: 32, fontWeight: "bold", color: COLORS.primary },
-  soldBadge: {
-    backgroundColor: COLORS.danger,
-    paddingHorizontal: 10,
+  price: { fontSize: 32, fontWeight: "bold", color: COLORS.text },
+  stockText: {
+    backgroundColor: "#e8f5e9",
+    color: "#2e7d32",
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 5,
+    fontWeight: "bold",
+    fontSize: 12,
   },
-  soldText: { color: "#fff", fontWeight: "bold", fontSize: 12 },
+  sellerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  avatarSmall: {
+    width: 35,
+    height: 35,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sellerName: { fontWeight: "bold", color: COLORS.text, fontSize: 15 },
+  ratingText: { fontSize: 12, color: COLORS.textMuted, marginLeft: 4 },
   title: {
     fontSize: 22,
     color: COLORS.text,
-    fontWeight: "600",
-    marginBottom: 5,
-  },
-  sellerLink: {
-    color: COLORS.primary,
-    fontSize: 16,
     fontWeight: "500",
-    marginBottom: 20,
+    marginBottom: 15,
   },
-  divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 15 },
-  sectionLabel: {
+  divider: { height: 1, backgroundColor: COLORS.border, marginBottom: 15 },
+  labelTitle: {
     fontSize: 14,
     color: COLORS.textLight,
     fontWeight: "bold",
-    marginBottom: 8,
+    marginBottom: 5,
   },
   description: {
     fontSize: 16,
@@ -226,18 +237,37 @@ const localStyles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 30,
   },
-  actionButton: {
+  mainButton: {
     backgroundColor: COLORS.secondary,
     padding: 18,
     borderRadius: 12,
+    alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
+  },
+  mainButtonText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  ownerBox: {
+    backgroundColor: "#f0e6ea",
+    padding: 15,
+    borderRadius: 10,
+    flexDirection: "row",
     alignItems: "center",
   },
-  actionButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
+  ownerText: {
+    color: COLORS.primary,
+    fontSize: 13,
     marginLeft: 10,
+    flex: 1,
+    fontWeight: "500",
   },
+  badgeContainer: {
+    position: "absolute",
+    bottom: 15,
+    right: 15,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  badgeText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
 });

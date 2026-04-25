@@ -20,6 +20,7 @@ import {
   doc,
   updateDoc,
   getDoc,
+  addDoc,
 } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../services/firebaseConfig";
@@ -30,7 +31,6 @@ export default function MyListingsScreen() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("activo");
 
-  // Estados para el Modal de Selección de Comprador
   const [selectorVisible, setSelectorVisible] = useState(false);
   const [selectedListing, setSelectedListing] = useState<any>(null);
   const [interesadosData, setInteresadosData] = useState<any[]>([]);
@@ -64,10 +64,7 @@ export default function MyListingsScreen() {
 
   const openBuyerSelector = async (listing: any) => {
     if (!listing.interesados || listing.interesados.length === 0) {
-      Alert.alert(
-        "Sin interesados",
-        "Nadie ha marcado 'Me interesa' en este anuncio aún.",
-      );
+      Alert.alert("Sin interesados", "Nadie ha marcado 'Me interesa' aún.");
       return;
     }
     setSelectedListing(listing);
@@ -75,7 +72,6 @@ export default function MyListingsScreen() {
     setLoadingInteresados(true);
 
     try {
-      // Obtener nombres de los interesados de la colección 'users'
       const usersInfo = [];
       for (const uid of listing.interesados) {
         const uDoc = await getDoc(doc(db, "users", uid));
@@ -91,16 +87,33 @@ export default function MyListingsScreen() {
 
   const confirmSale = async (compradorId: string) => {
     try {
-      await updateDoc(doc(db, "listings", selectedListing.id), {
-        estado: "vendido",
+      // 1. Crear Recibo/Transacción en una colección separada
+      await addDoc(collection(db, "transactions"), {
+        listing_id: selectedListing.id,
+        vendedor_id: selectedListing.vendedor_id,
         comprador_id: compradorId,
-        fecha_venta: new Date().toISOString(),
+        titulo: selectedListing.titulo,
+        precio: selectedListing.precio,
+        imagen: selectedListing.imagenes?.[0] || "",
+        fecha: new Date().toISOString(),
+        calificado: false,
       });
+
+      // 2. Gestionar Stock (Solo si es producto)
+      if (selectedListing.tipo === "producto" && selectedListing.stock > 0) {
+        const nuevoStock = selectedListing.stock - 1;
+        const nuevoEstado = nuevoStock <= 0 ? "agotado" : "activo"; // Se agota si llega a 0
+        await updateDoc(doc(db, "listings", selectedListing.id), {
+          stock: nuevoStock,
+          estado: nuevoEstado,
+        });
+      }
+
       setSelectorVisible(false);
       fetchMyListings();
       Alert.alert(
-        "¡Venta confirmada!",
-        "Ahora el comprador podrá calificar tu servicio.",
+        "Venta confirmada",
+        "Se ha enviado el recibo al comprador. Ahora podrá calificarte.",
       );
     } catch (e) {
       Alert.alert("Error", "No se pudo confirmar la venta.");
@@ -115,7 +128,10 @@ export default function MyListingsScreen() {
       />
       <View style={localStyles.info}>
         <Text style={localStyles.title}>{item.titulo}</Text>
-        <Text style={localStyles.price}>S/ {item.precio.toFixed(2)}</Text>
+        <Text style={localStyles.price}>
+          S/ {item.precio.toFixed(2)}{" "}
+          {item.tipo === "producto" ? `• Stock: ${item.stock}` : ""}
+        </Text>
       </View>
       {item.estado === "activo" && (
         <TouchableOpacity
@@ -123,7 +139,7 @@ export default function MyListingsScreen() {
           onPress={() => openBuyerSelector(item)}
         >
           <Ionicons name="cart-outline" size={20} color="#fff" />
-          <Text style={localStyles.soldButtonText}>Vendido</Text>
+          <Text style={localStyles.soldButtonText}>Vender</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -151,17 +167,17 @@ export default function MyListingsScreen() {
         <TouchableOpacity
           style={[
             localStyles.tab,
-            filterStatus === "vendido" && localStyles.activeTab,
+            filterStatus === "agotado" && localStyles.activeTab,
           ]}
-          onPress={() => setFilterStatus("vendido")}
+          onPress={() => setFilterStatus("agotado")}
         >
           <Text
             style={[
               localStyles.tabText,
-              filterStatus === "vendido" && localStyles.activeTabText,
+              filterStatus === "agotado" && localStyles.activeTabText,
             ]}
           >
-            Vendidos
+            Agotados
           </Text>
         </TouchableOpacity>
       </View>
@@ -180,15 +196,10 @@ export default function MyListingsScreen() {
         />
       )}
 
-      {/* MODAL PARA ELEGIR COMPRADOR */}
       <Modal visible={selectorVisible} animationType="slide" transparent={true}>
         <View style={localStyles.modalOverlay}>
           <View style={localStyles.modalContent}>
-            <Text style={localStyles.modalTitle}>¿Quién lo compró?</Text>
-            <Text style={localStyles.modalSubtitle}>
-              Selecciona al alumno para que pueda calificarte.
-            </Text>
-
+            <Text style={localStyles.modalTitle}>¿A quién se lo vendiste?</Text>
             {loadingInteresados ? (
               <ActivityIndicator color={COLORS.primary} />
             ) : (
@@ -207,9 +218,9 @@ export default function MyListingsScreen() {
                     />
                     <Text style={localStyles.userName}>{user.nombre}</Text>
                     <Ionicons
-                      name="chevron-forward"
-                      size={18}
-                      color={COLORS.textLight}
+                      name="checkmark-circle-outline"
+                      size={24}
+                      color={COLORS.secondary}
                     />
                   </TouchableOpacity>
                 )}
@@ -246,7 +257,7 @@ const localStyles = StyleSheet.create({
   thumbnail: { width: 50, height: 50, borderRadius: 5 },
   info: { flex: 1, marginLeft: 12 },
   title: { fontWeight: "bold", fontSize: 15 },
-  price: { color: COLORS.primary },
+  price: { color: COLORS.primary, marginTop: 2 },
   soldButton: {
     backgroundColor: COLORS.secondary,
     padding: 10,
@@ -267,8 +278,7 @@ const localStyles = StyleSheet.create({
     padding: 25,
     maxHeight: "60%",
   },
-  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 5 },
-  modalSubtitle: { color: COLORS.textLight, marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 20 },
   userOption: {
     flexDirection: "row",
     alignItems: "center",

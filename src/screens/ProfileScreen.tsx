@@ -99,6 +99,11 @@ export default function ProfileScreen({ navigation }: any) {
       <View style={localStyles.section}>
         <Text style={localStyles.sectionTitle}>Cuenta</Text>
         <MenuItem
+          icon="bag-check-outline"
+          title="Mis Compras"
+          onPress={() => navigation.navigate("MisCompras")}
+        />
+        <MenuItem
           icon="person-outline"
           title="Editar Perfil"
           onPress={() => navigation.navigate("EditProfile", { userData })}

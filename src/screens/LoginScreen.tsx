@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Keyboard,
   TouchableWithoutFeedback,
+  ScrollView,
 } from "react-native";
 import { auth, db } from "../services/firebaseConfig";
 import {
@@ -17,48 +18,62 @@ import {
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { globalStyles, COLORS, SPACING } from "../theme/theme"; // <-- Importamos el tema
+import { globalStyles, COLORS, SPACING } from "../theme/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [facultad, setFacultad] = useState("");
+
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async () => {
-    if (!email.trim().toLowerCase().endsWith("@unsa.edu.pe")) {
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail.endsWith("@unsa.edu.pe")) {
       Alert.alert(
         "Acceso Denegado",
-        "Solo se permiten correos institucionales de la UNSA (@unsa.edu.pe).",
+        "Usa tu correo institucional @unsa.edu.pe",
       );
       return;
     }
-    if (password.length < 6) {
-      Alert.alert("Error", "La contraseña debe tener al menos 6 caracteres.");
+
+    if (!isLogin && (!nombre || !whatsapp || !facultad)) {
+      Alert.alert(
+        "Campos incompletos",
+        "Para registrarte, todos los datos del perfil son obligatorios.",
+      );
       return;
     }
 
     setLoading(true);
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
+        await signInWithEmailAndPassword(auth, cleanEmail, password);
       } else {
         const userCredential = await createUserWithEmailAndPassword(
           auth,
-          email.trim(),
+          cleanEmail,
           password,
         );
+
+        // Guardamos el perfil completo inmediatamente
         await setDoc(doc(db, "users", userCredential.user.uid), {
-          email: email.trim().toLowerCase(),
-          nombre: "",
-          facultad: "",
-          whatsapp: "",
+          email: cleanEmail,
+          nombre: nombre.trim(),
+          whatsapp: whatsapp.trim(),
+          facultad: facultad.trim(),
           rating_promedio: 0,
           total_ventas: 0,
+          fecha_registro: new Date().toISOString(),
         });
       }
     } catch (error: any) {
-      Alert.alert("Error de Autenticación", error.message);
+      Alert.alert("Error", error.message);
     } finally {
       setLoading(false);
     }
@@ -66,23 +81,23 @@ export default function LoginScreen() {
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View
-        style={[globalStyles.containerPadding, { justifyContent: "center" }]}
+      <ScrollView
+        contentContainerStyle={[
+          globalStyles.containerPadding,
+          { justifyContent: "center" },
+        ]}
       >
-        <Text
-          style={[
-            globalStyles.title,
-            { fontSize: 28, marginBottom: SPACING.sm },
-          ]}
-        >
-          UNSA Market & Skills
-        </Text>
-        <Text style={localStyles.subtitle}>
-          {isLogin
-            ? "Inicia sesión con tu correo institucional"
-            : "Crea tu cuenta universitaria"}
-        </Text>
+        <View style={{ alignItems: "center", marginBottom: SPACING.xl }}>
+          <Ionicons name="cart" size={60} color={COLORS.primary} />
+          <Text style={[globalStyles.title, { marginBottom: 0 }]}>
+            UNSA Market
+          </Text>
+          <Text style={{ color: COLORS.textMuted }}>
+            Comunidad Universitaria Conectada
+          </Text>
+        </View>
 
+        <Text style={globalStyles.label}>Correo Institucional</Text>
         <TextInput
           style={globalStyles.input}
           placeholder="ejemplo@unsa.edu.pe"
@@ -91,9 +106,40 @@ export default function LoginScreen() {
           keyboardType="email-address"
           autoCapitalize="none"
         />
+
+        {!isLogin && (
+          <>
+            <Text style={globalStyles.label}>Nombre Completo</Text>
+            <TextInput
+              style={globalStyles.input}
+              placeholder="Nombres y Apellidos"
+              value={nombre}
+              onChangeText={setNombre}
+            />
+
+            <Text style={globalStyles.label}>WhatsApp</Text>
+            <TextInput
+              style={globalStyles.input}
+              placeholder="987654321"
+              value={whatsapp}
+              onChangeText={setWhatsapp}
+              keyboardType="phone-pad"
+            />
+
+            <Text style={globalStyles.label}>Facultad</Text>
+            <TextInput
+              style={globalStyles.input}
+              placeholder="Ej. Ing. de Sistemas"
+              value={facultad}
+              onChangeText={setFacultad}
+            />
+          </>
+        )}
+
+        <Text style={globalStyles.label}>Contraseña</Text>
         <TextInput
           style={globalStyles.input}
-          placeholder="Contraseña"
+          placeholder="Mínimo 6 caracteres"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -105,37 +151,31 @@ export default function LoginScreen() {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color={COLORS.surface} />
+            <ActivityIndicator color="#fff" />
           ) : (
             <Text style={globalStyles.primaryButtonText}>
-              {isLogin ? "Ingresar" : "Registrarse"}
+              {isLogin ? "Ingresar" : "Crear Cuenta"}
             </Text>
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
-          <Text style={localStyles.switchText}>
+        <TouchableOpacity
+          onPress={() => setIsLogin(!isLogin)}
+          style={{ marginTop: SPACING.lg }}
+        >
+          <Text
+            style={{
+              textAlign: "center",
+              color: COLORS.primary,
+              fontWeight: "bold",
+            }}
+          >
             {isLogin
               ? "¿No tienes cuenta? Regístrate aquí"
               : "¿Ya tienes cuenta? Inicia sesión"}
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </TouchableWithoutFeedback>
   );
 }
-
-const localStyles = StyleSheet.create({
-  subtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: SPACING.xl,
-    color: COLORS.textMuted,
-  },
-  switchText: {
-    textAlign: "center",
-    marginTop: SPACING.lg,
-    color: COLORS.primary,
-    fontWeight: "600",
-  },
-});

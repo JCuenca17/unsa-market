@@ -7,7 +7,7 @@ import { View, ActivityIndicator } from "react-native";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "../services/firebaseConfig";
 
-// Importaciones de pantallas
+// Importaciones COMPLETAS
 import LoginScreen from "../screens/LoginScreen";
 import HomeScreen from "../screens/HomeScreen";
 import ListingDetailScreen from "../screens/ListingDetailScreen";
@@ -15,13 +15,14 @@ import ProfileScreen from "../screens/ProfileScreen";
 import MyListingsScreen from "../screens/MyListingsScreen";
 import EditListingScreen from "../screens/EditListingScreen";
 import EditProfileScreen from "../screens/EditProfileScreen";
-import CreateListingScreen from "../screens/CreateListingScreen"; // <-- Importación añadida
+import CreateListingScreen from "../screens/CreateListingScreen";
+import PublicProfileScreen from "../screens/PublicProfileScreen";
 import ReviewScreen from "../screens/ReviewScreen";
+import MyPurchasesScreen from "../screens/MyPurchasesScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// Las pestañas inferiores se agrupan en su propio componente
 function MainTabs() {
   return (
     <Tab.Navigator screenOptions={{ tabBarActiveTintColor: "#5A0028" }}>
@@ -54,7 +55,6 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       {user ? (
-        // Usamos el Stack Navigator como contenedor principal cuando hay sesión
         <Stack.Navigator>
           <Stack.Screen
             name="MainTabs"
@@ -72,6 +72,11 @@ export default function AppNavigator() {
             options={{ title: "Mis Publicaciones" }}
           />
           <Stack.Screen
+            name="MisCompras"
+            component={MyPurchasesScreen}
+            options={{ title: "Mis Compras" }}
+          />
+          <Stack.Screen
             name="EditProfile"
             component={EditProfileScreen}
             options={{ title: "Editar Perfil" }}
@@ -81,16 +86,20 @@ export default function AppNavigator() {
             component={EditListingScreen}
             options={{ title: "Editar Anuncio" }}
           />
-          {/* Registro de la pantalla de publicación añadida al Stack */}
           <Stack.Screen
             name="Publicar"
             component={CreateListingScreen}
             options={{ title: "Nuevo Anuncio" }}
           />
           <Stack.Screen
+            name="PublicProfile"
+            component={PublicProfileScreen}
+            options={{ title: "Perfil del Vendedor" }}
+          />
+          <Stack.Screen
             name="Calificar"
             component={ReviewScreen}
-            options={{ title: "Calificar Vendedor" }}
+            options={{ title: "Calificar Compra" }}
           />
         </Stack.Navigator>
       ) : (

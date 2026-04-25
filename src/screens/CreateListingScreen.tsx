@@ -36,10 +36,10 @@ export default function CreateListingScreen({ navigation }: any) {
   const [precio, setPrecio] = useState("");
   const [tipo, setTipo] = useState("Producto");
   const [categoria, setCategoria] = useState("");
+  const [stock, setStock] = useState("1"); // NUEVO: Stock
   const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Estados para los modales selectores
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [typeModalVisible, setTypeModalVisible] = useState(false);
 
@@ -71,7 +71,7 @@ export default function CreateListingScreen({ navigation }: any) {
     if (!currentUser) return;
     setLoading(true);
     try {
-      await addDoc(collection(db, "listings"), {
+      const listingData = {
         vendedor_id: currentUser.uid,
         titulo: titulo.trim(),
         descripcion: descripcion.trim(),
@@ -81,9 +81,11 @@ export default function CreateListingScreen({ navigation }: any) {
         estado: "activo",
         imagenes: imagenesBase64,
         fecha_creacion: new Date().toISOString(),
-      });
+        stock: tipo === "Producto" ? parseInt(stock) || 1 : null, // Se guarda stock solo si es producto
+      };
+      await addDoc(collection(db, "listings"), listingData);
       Alert.alert("Éxito", "Anuncio publicado.");
-      navigation.goBack(); // Volvemos a la pantalla anterior (Inicio)
+      navigation.goBack();
     } catch (error: any) {
       Alert.alert("Error", error.message);
     } finally {
@@ -91,7 +93,6 @@ export default function CreateListingScreen({ navigation }: any) {
     }
   };
 
-  // Componente reutilizable para los selectores
   const SelectorField = ({ label, value, onPress }: any) => (
     <View style={{ marginBottom: SPACING.md }}>
       <Text style={globalStyles.label}>{label} *</Text>
@@ -156,6 +157,21 @@ export default function CreateListingScreen({ navigation }: any) {
         value={tipo}
         onPress={() => setTypeModalVisible(true)}
       />
+
+      {/* CAMPO CONDICIONAL DE STOCK */}
+      {tipo === "Producto" && (
+        <View>
+          <Text style={globalStyles.label}>Stock Disponible *</Text>
+          <TextInput
+            style={globalStyles.input}
+            value={stock}
+            onChangeText={setStock}
+            placeholder="Ej. 1, 5, 10"
+            keyboardType="numeric"
+          />
+        </View>
+      )}
+
       <SelectorField
         label="Categoría"
         value={categoria}
@@ -176,7 +192,7 @@ export default function CreateListingScreen({ navigation }: any) {
         style={[globalStyles.input, localStyles.textArea]}
         value={descripcion}
         onChangeText={setDescripcion}
-        placeholder="Agrega detalles como estado, marca, horarios..."
+        placeholder="Agrega detalles..."
         multiline
         numberOfLines={5}
       />
@@ -193,7 +209,7 @@ export default function CreateListingScreen({ navigation }: any) {
         )}
       </TouchableOpacity>
 
-      {/* Modal para Tipo */}
+      {/* Modal Tipo */}
       <Modal visible={typeModalVisible} transparent={true} animationType="fade">
         <TouchableOpacity
           style={localStyles.modalOverlay}
@@ -218,7 +234,7 @@ export default function CreateListingScreen({ navigation }: any) {
         </TouchableOpacity>
       </Modal>
 
-      {/* Modal para Categoría */}
+      {/* Modal Categoría */}
       <Modal
         visible={categoryModalVisible}
         transparent={true}
