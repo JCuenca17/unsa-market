@@ -10,22 +10,38 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  Modal,
+  FlatList,
 } from "react-native";
 import { collection, addDoc } from "firebase/firestore";
 import * as ImagePicker from "expo-image-picker";
+import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
-const CATEGORIAS = ["Libros", "Tecnología", "Alimentos", "Tutorías", "Otros"];
+const CATEGORIAS = [
+  "Libros",
+  "Tecnología",
+  "Alimentos",
+  "Tutorías",
+  "Inmuebles",
+  "Servicios",
+  "Otros",
+];
+const TIPOS = ["Producto", "Servicio"];
 
 export default function CreateListingScreen({ navigation }: any) {
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [precio, setPrecio] = useState("");
-  const [tipo, setTipo] = useState<"producto" | "servicio">("producto");
+  const [tipo, setTipo] = useState("Producto");
   const [categoria, setCategoria] = useState("");
   const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Estados para los modales selectores
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [typeModalVisible, setTypeModalVisible] = useState(false);
 
   const pickImage = async () => {
     if (imagenesBase64.length >= 5) {
@@ -46,12 +62,6 @@ export default function CreateListingScreen({ navigation }: any) {
       ]);
   };
 
-  const removeImage = (index: number) => {
-    const newImages = [...imagenesBase64];
-    newImages.splice(index, 1);
-    setImagenesBase64(newImages);
-  };
-
   const handlePublish = async () => {
     if (!titulo || !precio || !categoria || imagenesBase64.length === 0) {
       Alert.alert("Error", "Completa campos obligatorios y sube foto.");
@@ -66,19 +76,14 @@ export default function CreateListingScreen({ navigation }: any) {
         titulo: titulo.trim(),
         descripcion: descripcion.trim(),
         precio: parseFloat(precio),
-        tipo,
+        tipo: tipo.toLowerCase(),
         categoria: categoria.trim(),
         estado: "activo",
         imagenes: imagenesBase64,
         fecha_creacion: new Date().toISOString(),
       });
       Alert.alert("Éxito", "Anuncio publicado.");
-      setTitulo("");
-      setDescripcion("");
-      setPrecio("");
-      setCategoria("");
-      setImagenesBase64([]);
-      navigation.navigate("Inicio");
+      navigation.goBack(); // Volvemos a la pantalla anterior (Inicio)
     } catch (error: any) {
       Alert.alert("Error", error.message);
     } finally {
@@ -86,101 +91,76 @@ export default function CreateListingScreen({ navigation }: any) {
     }
   };
 
+  // Componente reutilizable para los selectores
+  const SelectorField = ({ label, value, onPress }: any) => (
+    <View style={{ marginBottom: SPACING.md }}>
+      <Text style={globalStyles.label}>{label} *</Text>
+      <TouchableOpacity style={localStyles.selectorInput} onPress={onPress}>
+        <Text
+          style={{
+            color: value ? COLORS.text : COLORS.textLight,
+            fontSize: 16,
+          }}
+        >
+          {value || "Seleccionar..."}
+        </Text>
+        <Ionicons name="chevron-down" size={20} color={COLORS.textLight} />
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <ScrollView
       contentContainerStyle={globalStyles.containerPadding}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     >
-      <Text style={globalStyles.title}>Publicar en la Tienda</Text>
-
-      <Text style={globalStyles.label}>Fotos ({imagenesBase64.length}/5)</Text>
+      <Text style={globalStyles.label}>
+        Fotos ({imagenesBase64.length}/5) *
+      </Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={localStyles.imageScroll}
       >
         <TouchableOpacity style={localStyles.addCard} onPress={pickImage}>
-          <Text style={localStyles.addText}>+</Text>
+          <Ionicons name="camera-outline" size={30} color={COLORS.textLight} />
         </TouchableOpacity>
         {imagenesBase64.map((uri, index) => (
           <View key={index} style={localStyles.imageWrapper}>
             <Image source={{ uri }} style={localStyles.thumbnail} />
             <TouchableOpacity
               style={localStyles.removeBadge}
-              onPress={() => removeImage(index)}
+              onPress={() => {
+                const newImages = [...imagenesBase64];
+                newImages.splice(index, 1);
+                setImagenesBase64(newImages);
+              }}
             >
-              <Text style={localStyles.removeText}>X</Text>
+              <Ionicons name="close" size={14} color={COLORS.surface} />
             </TouchableOpacity>
           </View>
         ))}
       </ScrollView>
-
-      <View style={localStyles.typeContainer}>
-        <TouchableOpacity
-          style={[
-            localStyles.typeButton,
-            tipo === "producto" && localStyles.typeButtonActive,
-          ]}
-          onPress={() => setTipo("producto")}
-        >
-          <Text
-            style={[
-              localStyles.typeText,
-              tipo === "producto" && localStyles.typeTextActive,
-            ]}
-          >
-            Producto
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            localStyles.typeButton,
-            tipo === "servicio" && localStyles.typeButtonActive,
-          ]}
-          onPress={() => setTipo("servicio")}
-        >
-          <Text
-            style={[
-              localStyles.typeText,
-              tipo === "servicio" && localStyles.typeTextActive,
-            ]}
-          >
-            Servicio
-          </Text>
-        </TouchableOpacity>
-      </View>
 
       <Text style={globalStyles.label}>Título *</Text>
       <TextInput
         style={globalStyles.input}
         value={titulo}
         onChangeText={setTitulo}
-        placeholder="¿Qué vendes?"
+        placeholder="Ej. Laptops, Libros..."
       />
 
-      <Text style={globalStyles.label}>Categoría *</Text>
-      <View style={localStyles.categoryGrid}>
-        {CATEGORIAS.map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[
-              localStyles.categoryChip,
-              categoria === cat && localStyles.categoryChipActive,
-            ]}
-            onPress={() => setCategoria(cat)}
-          >
-            <Text
-              style={[
-                localStyles.categoryChipText,
-                categoria === cat && localStyles.categoryChipTextActive,
-              ]}
-            >
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <SelectorField
+        label="Tipo de Anuncio"
+        value={tipo}
+        onPress={() => setTypeModalVisible(true)}
+      />
+      <SelectorField
+        label="Categoría"
+        value={categoria}
+        onPress={() => setCategoryModalVisible(true)}
+      />
 
       <Text style={globalStyles.label}>Precio (S/) *</Text>
       <TextInput
@@ -196,22 +176,80 @@ export default function CreateListingScreen({ navigation }: any) {
         style={[globalStyles.input, localStyles.textArea]}
         value={descripcion}
         onChangeText={setDescripcion}
-        placeholder="Detalles extra..."
+        placeholder="Agrega detalles como estado, marca, horarios..."
         multiline
-        numberOfLines={4}
+        numberOfLines={5}
       />
 
       <TouchableOpacity
-        style={globalStyles.primaryButton}
+        style={[globalStyles.primaryButton, { marginTop: SPACING.lg }]}
         onPress={handlePublish}
         disabled={loading}
       >
         {loading ? (
           <ActivityIndicator color={COLORS.surface} />
         ) : (
-          <Text style={globalStyles.primaryButtonText}>Subir Anuncio</Text>
+          <Text style={globalStyles.primaryButtonText}>Publicar Anuncio</Text>
         )}
       </TouchableOpacity>
+
+      {/* Modal para Tipo */}
+      <Modal visible={typeModalVisible} transparent={true} animationType="fade">
+        <TouchableOpacity
+          style={localStyles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setTypeModalVisible(false)}
+        >
+          <View style={localStyles.modalContentCenter}>
+            <Text style={localStyles.modalTitle}>Tipo de Anuncio</Text>
+            {TIPOS.map((t) => (
+              <TouchableOpacity
+                key={t}
+                style={localStyles.modalOption}
+                onPress={() => {
+                  setTipo(t);
+                  setTypeModalVisible(false);
+                }}
+              >
+                <Text style={localStyles.modalOptionText}>{t}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modal para Categoría */}
+      <Modal
+        visible={categoryModalVisible}
+        transparent={true}
+        animationType="fade"
+      >
+        <TouchableOpacity
+          style={localStyles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setCategoryModalVisible(false)}
+        >
+          <View style={localStyles.modalContentCenter}>
+            <Text style={localStyles.modalTitle}>Seleccionar Categoría</Text>
+            <FlatList
+              data={CATEGORIAS}
+              keyExtractor={(item) => item}
+              style={{ maxHeight: 300 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={localStyles.modalOption}
+                  onPress={() => {
+                    setCategoria(item);
+                    setCategoryModalVisible(false);
+                  }}
+                >
+                  <Text style={localStyles.modalOptionText}>{item}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
@@ -221,57 +259,66 @@ const localStyles = StyleSheet.create({
   addCard: {
     width: 80,
     height: 80,
-    backgroundColor: COLORS.border,
-    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
     marginRight: SPACING.sm,
-    borderStyle: "dashed",
     borderWidth: 1,
-    borderColor: COLORS.textLight,
+    borderColor: COLORS.border,
+    borderStyle: "dashed",
   },
-  addText: { fontSize: 30, color: COLORS.textMuted },
   imageWrapper: { position: "relative", marginRight: SPACING.sm },
-  thumbnail: { width: 80, height: 80, borderRadius: 8 },
+  thumbnail: { width: 80, height: 80, borderRadius: 10 },
   removeBadge: {
     position: "absolute",
     top: -5,
     right: -5,
     backgroundColor: COLORS.danger,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     justifyContent: "center",
     alignItems: "center",
     zIndex: 1,
+    elevation: 2,
   },
-  removeText: { color: COLORS.surface, fontSize: 12, fontWeight: "bold" },
-  typeContainer: { flexDirection: "row", marginBottom: SPACING.lg },
-  typeButton: {
-    flex: 1,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    alignItems: "center",
-  },
-  typeButtonActive: { backgroundColor: COLORS.primary },
-  typeText: { color: COLORS.primary, fontWeight: "bold" },
-  typeTextActive: { color: COLORS.surface },
-  textArea: { height: 100, textAlignVertical: "top" },
-  categoryGrid: {
+  selectorInput: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+    borderRadius: 8,
+  },
+  textArea: { height: 120, textAlignVertical: "top" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SPACING.xl,
+  },
+  modalContentCenter: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 15,
+    width: "100%",
+    padding: SPACING.lg,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: COLORS.text,
     marginBottom: SPACING.md,
+    textAlign: "center",
   },
-  categoryChip: {
-    backgroundColor: "#eee",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
+  modalOption: {
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.background,
   },
-  categoryChipActive: { backgroundColor: COLORS.primary },
-  categoryChipText: { color: COLORS.textMuted, fontSize: 13 },
-  categoryChipTextActive: { color: COLORS.surface, fontWeight: "bold" },
+  modalOptionText: { fontSize: 16, color: COLORS.text, textAlign: "center" },
 });

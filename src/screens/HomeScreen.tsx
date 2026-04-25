@@ -10,7 +10,7 @@ import {
   Image,
   RefreshControl,
   TextInput,
-  ScrollView,
+  Modal,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
@@ -24,6 +24,8 @@ const CATEGORIAS = [
   "Tecnología",
   "Alimentos",
   "Tutorías",
+  "Inmuebles",
+  "Servicios",
   "Otros",
 ];
 
@@ -40,10 +42,11 @@ export default function HomeScreen({ navigation }: any) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Estados para búsqueda y filtrado
   const [searchText, setSearchText] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todos");
+
+  // Estado para el panel de filtros
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   const fetchListings = async () => {
     try {
@@ -52,14 +55,11 @@ export default function HomeScreen({ navigation }: any) {
         where("estado", "==", "activo"),
         orderBy("fecha_creacion", "desc"),
       );
-
       const querySnapshot = await getDocs(q);
       const fetchedListings: Listing[] = [];
-
-      querySnapshot.forEach((doc) => {
-        fetchedListings.push({ id: doc.id, ...doc.data() } as Listing);
-      });
-
+      querySnapshot.forEach((doc) =>
+        fetchedListings.push({ id: doc.id, ...doc.data() } as Listing),
+      );
       setListings(fetchedListings);
     } catch (error) {
       console.error("Error al descargar catálogo:", error);
@@ -80,7 +80,6 @@ export default function HomeScreen({ navigation }: any) {
     fetchListings();
   };
 
-  // Lógica de filtrado en tiempo real
   const filteredListings = useMemo(() => {
     return listings.filter((item) => {
       const matchesSearch = item.titulo
@@ -97,7 +96,6 @@ export default function HomeScreen({ navigation }: any) {
       item.tipo === "producto"
         ? "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80"
         : "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&q=80";
-
     const coverImage =
       item.imagenes && item.imagenes.length > 0
         ? item.imagenes[0]
@@ -123,59 +121,50 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <View style={globalStyles.container}>
-      {/* Cabecera con Búsqueda */}
+      {/* Cabecera compacta y profesional */}
       <View style={localStyles.headerContainer}>
-        <View style={localStyles.searchBar}>
-          <Ionicons
-            name="search"
-            size={20}
-            color={COLORS.textLight}
-            style={{ marginRight: 10 }}
-          />
-          <TextInput
-            style={localStyles.searchInput}
-            placeholder="Buscar en UNSA Market..."
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-          {searchText !== "" && (
-            <TouchableOpacity onPress={() => setSearchText("")}>
-              <Ionicons
-                name="close-circle"
-                size={20}
-                color={COLORS.textLight}
-              />
-            </TouchableOpacity>
-          )}
+        <View style={localStyles.searchRow}>
+          <View style={localStyles.searchBar}>
+            <Ionicons
+              name="search"
+              size={20}
+              color={COLORS.textLight}
+              style={{ marginRight: SPACING.sm }}
+            />
+            <TextInput
+              style={localStyles.searchInput}
+              placeholder="Buscar anuncios..."
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+            {searchText !== "" && (
+              <TouchableOpacity onPress={() => setSearchText("")}>
+                <Ionicons
+                  name="close-circle"
+                  size={20}
+                  color={COLORS.textLight}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+          {/* Botón para abrir el panel de filtros */}
+          <TouchableOpacity
+            style={localStyles.filterButton}
+            onPress={() => setFilterModalVisible(true)}
+          >
+            <Ionicons name="options-outline" size={24} color={COLORS.surface} />
+          </TouchableOpacity>
         </View>
-
-        {/* Chips de Categorías */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={localStyles.categoriesScroll}
-        >
-          {CATEGORIAS.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                localStyles.categoryChip,
-                selectedCategory === cat && localStyles.categoryChipActive,
-              ]}
-              onPress={() => setSelectedCategory(cat)}
-            >
-              <Text
-                style={[
-                  localStyles.categoryChipText,
-                  selectedCategory === cat &&
-                    localStyles.categoryChipTextActive,
-                ]}
-              >
-                {cat}
-              </Text>
+        {selectedCategory !== "Todos" && (
+          <View style={localStyles.activeFilterRow}>
+            <Text style={localStyles.activeFilterText}>
+              Categoría: {selectedCategory}
+            </Text>
+            <TouchableOpacity onPress={() => setSelectedCategory("Todos")}>
+              <Ionicons name="close" size={16} color={COLORS.primary} />
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+          </View>
+        )}
       </View>
 
       {loading ? (
@@ -192,7 +181,7 @@ export default function HomeScreen({ navigation }: any) {
           contentContainerStyle={localStyles.listContainer}
           ListEmptyComponent={
             <Text style={globalStyles.emptyText}>
-              No se encontraron resultados para tu búsqueda.
+              No se encontraron resultados.
             </Text>
           }
           refreshControl={
@@ -204,6 +193,67 @@ export default function HomeScreen({ navigation }: any) {
           }
         />
       )}
+
+      {/* Floating Action Button (FAB) para publicar */}
+      <TouchableOpacity
+        style={localStyles.fab}
+        onPress={() => navigation.navigate("Publicar")}
+      >
+        <Ionicons name="add" size={32} color={COLORS.surface} />
+      </TouchableOpacity>
+
+      {/* Modal de Filtros (Bottom Sheet Nativos) */}
+      <Modal
+        visible={filterModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <View style={localStyles.modalOverlay}>
+          <View style={localStyles.modalContent}>
+            <View style={localStyles.modalHeader}>
+              <Text style={localStyles.modalTitle}>Filtrar Categorías</Text>
+              <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
+                <Ionicons name="close" size={28} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={CATEGORIAS}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    localStyles.categoryOption,
+                    selectedCategory === item &&
+                      localStyles.categoryOptionActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedCategory(item);
+                    setFilterModalVisible(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      localStyles.categoryOptionText,
+                      selectedCategory === item &&
+                        localStyles.categoryOptionTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                  {selectedCategory === item && (
+                    <Ionicons
+                      name="checkmark"
+                      size={20}
+                      color={COLORS.primary}
+                    />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -213,59 +263,58 @@ const localStyles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     paddingTop: SPACING.md,
     paddingBottom: SPACING.sm,
-    elevation: 4,
+    elevation: 2,
     shadowColor: "#000",
     shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowRadius: 3,
+    zIndex: 1,
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.xs,
   },
   searchBar: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.background,
-    marginHorizontal: SPACING.lg,
     paddingHorizontal: SPACING.md,
     height: 45,
-    borderRadius: 25,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
+    marginRight: SPACING.sm,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: COLORS.text,
-  },
-  categoriesScroll: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  categoryChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: COLORS.background,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  categoryChipActive: {
+  searchInput: { flex: 1, fontSize: 15, color: COLORS.text },
+  filterButton: {
     backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    height: 45,
+    width: 45,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  categoryChipText: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    fontWeight: "500",
+  activeFilterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0e6ea",
+    alignSelf: "flex-start",
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: 15,
+    marginLeft: SPACING.lg,
+    marginTop: SPACING.xs,
   },
-  categoryChipTextActive: {
-    color: COLORS.surface,
-    fontWeight: "bold",
+  activeFilterText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: "600",
+    marginRight: 4,
   },
-  listContainer: {
-    padding: SPACING.sm,
-  },
-  row: {
-    justifyContent: "space-between",
-  },
+  listContainer: { padding: SPACING.sm, paddingBottom: 100 }, // Espacio para que el FAB no tape contenido
+  row: { justifyContent: "space-between" },
   card: {
     flex: 1,
     backgroundColor: COLORS.surface,
@@ -273,36 +322,74 @@ const localStyles = StyleSheet.create({
     marginBottom: SPACING.md,
     marginHorizontal: 5,
     overflow: "hidden",
-    elevation: 3,
+    elevation: 2,
     shadowColor: "#000",
     shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowRadius: 3,
     maxWidth: "48%",
   },
-  cardImage: {
-    width: "100%",
-    height: 140,
-    backgroundColor: COLORS.border,
-  },
-  cardContent: {
-    padding: SPACING.sm,
-  },
+  cardImage: { width: "100%", height: 140, backgroundColor: COLORS.border },
+  cardContent: { padding: SPACING.sm },
   price: {
     fontSize: 18,
     color: COLORS.text,
     fontWeight: "bold",
     marginBottom: 4,
   },
-  title: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    marginBottom: 6,
-    height: 35,
-  },
+  title: { fontSize: 13, color: COLORS.textMuted, marginBottom: 6, height: 35 },
   category: {
     color: COLORS.textLight,
     fontSize: 11,
     fontWeight: "600",
     textTransform: "uppercase",
   },
+
+  // Estilos del Botón Flotante
+  fab: {
+    position: "absolute",
+    bottom: SPACING.xl,
+    right: SPACING.lg,
+    backgroundColor: COLORS.primary,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+  },
+
+  // Estilos del Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: SPACING.lg,
+    maxHeight: "70%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: SPACING.md,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "bold", color: COLORS.text },
+  categoryOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  categoryOptionActive: { backgroundColor: "#fafafa" },
+  categoryOptionText: { fontSize: 16, color: COLORS.text },
+  categoryOptionTextActive: { color: COLORS.primary, fontWeight: "bold" },
 });

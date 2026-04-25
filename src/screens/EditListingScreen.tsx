@@ -9,45 +9,81 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Modal,
+  FlatList,
 } from "react-native";
 import { doc, updateDoc } from "firebase/firestore";
+import { Ionicons } from "@expo/vector-icons";
 import { db } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
-const CATEGORIAS = ["Libros", "Tecnología", "Alimentos", "Tutorías", "Otros"];
+const CATEGORIAS = [
+  "Libros",
+  "Tecnología",
+  "Alimentos",
+  "Tutorías",
+  "Inmuebles",
+  "Servicios",
+  "Otros",
+];
+const TIPOS = ["Producto", "Servicio"];
 
 export default function EditListingScreen({ route, navigation }: any) {
-  const { item } = route.params; // Recibimos el anuncio a editar
+  const { item } = route.params; // Datos del anuncio a editar
 
+  // Inicializamos los estados con los valores actuales del anuncio
   const [titulo, setTitulo] = useState(item.titulo);
   const [descripcion, setDescripcion] = useState(item.descripcion || "");
   const [precio, setPrecio] = useState(item.precio.toString());
-  const [tipo, setTipo] = useState<"producto" | "servicio">(item.tipo);
+  const [tipo, setTipo] = useState(
+    item.tipo.charAt(0).toUpperCase() + item.tipo.slice(1),
+  ); // Formateo Capitalizado
   const [categoria, setCategoria] = useState(item.categoria);
   const [updating, setUpdating] = useState(false);
 
+  // Estados para controlar los selectores modales
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [typeModalVisible, setTypeModalVisible] = useState(false);
+
   const handleUpdate = async () => {
     if (!titulo || !precio || !categoria) {
-      Alert.alert("Error", "Completa los campos obligatorios.");
+      Alert.alert(
+        "Error",
+        "Los campos marcados con asterisco (*) son obligatorios.",
+      );
       return;
     }
+
     setUpdating(true);
     try {
-      await updateDoc(doc(db, "listings", item.id), {
+      const listingRef = doc(db, "listings", item.id);
+      await updateDoc(listingRef, {
         titulo: titulo.trim(),
         descripcion: descripcion.trim(),
         precio: parseFloat(precio),
-        tipo: tipo,
+        tipo: tipo.toLowerCase(),
         categoria: categoria.trim(),
       });
-      Alert.alert("Éxito", "Anuncio actualizado correctamente.");
-      navigation.goBack();
+
+      Alert.alert("Éxito", "El anuncio ha sido actualizado correctamente.");
+      navigation.goBack(); // Regresamos a la lista de "Mis Anuncios"
     } catch (error: any) {
-      Alert.alert("Error", error.message);
+      Alert.alert("Error al actualizar", error.message);
     } finally {
       setUpdating(false);
     }
   };
+
+  // Componente de selector profesional
+  const SelectorField = ({ label, value, onPress }: any) => (
+    <View style={{ marginBottom: SPACING.md }}>
+      <Text style={globalStyles.label}>{label} *</Text>
+      <TouchableOpacity style={localStyles.selectorInput} onPress={onPress}>
+        <Text style={{ color: COLORS.text, fontSize: 16 }}>{value}</Text>
+        <Ionicons name="chevron-down" size={20} color={COLORS.textLight} />
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <ScrollView
@@ -55,73 +91,27 @@ export default function EditListingScreen({ route, navigation }: any) {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     >
-      <Text style={globalStyles.title}>Editar Anuncio</Text>
+      <Text style={globalStyles.title}>Editar Detalles</Text>
 
-      <View style={localStyles.typeContainer}>
-        <TouchableOpacity
-          style={[
-            localStyles.typeButton,
-            tipo === "producto" && localStyles.typeButtonActive,
-          ]}
-          onPress={() => setTipo("producto")}
-        >
-          <Text
-            style={[
-              localStyles.typeText,
-              tipo === "producto" && localStyles.typeTextActive,
-            ]}
-          >
-            Producto
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            localStyles.typeButton,
-            tipo === "servicio" && localStyles.typeButtonActive,
-          ]}
-          onPress={() => setTipo("servicio")}
-        >
-          <Text
-            style={[
-              localStyles.typeText,
-              tipo === "servicio" && localStyles.typeTextActive,
-            ]}
-          >
-            Servicio
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={globalStyles.label}>Título *</Text>
+      <Text style={globalStyles.label}>Título del Anuncio *</Text>
       <TextInput
         style={globalStyles.input}
         value={titulo}
         onChangeText={setTitulo}
-        placeholder="¿Qué vendes?"
+        placeholder="¿Qué estás vendiendo?"
       />
 
-      <Text style={globalStyles.label}>Categoría *</Text>
-      <View style={localStyles.categoryGrid}>
-        {CATEGORIAS.map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[
-              localStyles.categoryChip,
-              categoria === cat && localStyles.categoryChipActive,
-            ]}
-            onPress={() => setCategoria(cat)}
-          >
-            <Text
-              style={[
-                localStyles.categoryChipText,
-                categoria === cat && localStyles.categoryChipTextActive,
-              ]}
-            >
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <SelectorField
+        label="Tipo"
+        value={tipo}
+        onPress={() => setTypeModalVisible(true)}
+      />
+
+      <SelectorField
+        label="Categoría"
+        value={categoria}
+        onPress={() => setCategoryModalVisible(true)}
+      />
 
       <Text style={globalStyles.label}>Precio (S/) *</Text>
       <TextInput
@@ -137,13 +127,13 @@ export default function EditListingScreen({ route, navigation }: any) {
         style={[globalStyles.input, localStyles.textArea]}
         value={descripcion}
         onChangeText={setDescripcion}
-        placeholder="Detalles extra..."
+        placeholder="Describe el estado del producto, marca, o detalles del servicio..."
         multiline
-        numberOfLines={4}
+        numberOfLines={5}
       />
 
       <TouchableOpacity
-        style={globalStyles.primaryButton}
+        style={[globalStyles.primaryButton, { marginTop: SPACING.lg }]}
         onPress={handleUpdate}
         disabled={updating}
       >
@@ -153,37 +143,129 @@ export default function EditListingScreen({ route, navigation }: any) {
           <Text style={globalStyles.primaryButtonText}>Guardar Cambios</Text>
         )}
       </TouchableOpacity>
+
+      {/* Modal para Seleccionar Tipo */}
+      <Modal visible={typeModalVisible} transparent={true} animationType="fade">
+        <TouchableOpacity
+          style={localStyles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setTypeModalVisible(false)}
+        >
+          <View style={localStyles.modalContentCenter}>
+            <Text style={localStyles.modalTitle}>Tipo de Publicación</Text>
+            {TIPOS.map((t) => (
+              <TouchableOpacity
+                key={t}
+                style={localStyles.modalOption}
+                onPress={() => {
+                  setTipo(t);
+                  setTypeModalVisible(false);
+                }}
+              >
+                <Text
+                  style={[
+                    localStyles.modalOptionText,
+                    tipo === t && { color: COLORS.primary, fontWeight: "bold" },
+                  ]}
+                >
+                  {t}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modal para Seleccionar Categoría */}
+      <Modal
+        visible={categoryModalVisible}
+        transparent={true}
+        animationType="fade"
+      >
+        <TouchableOpacity
+          style={localStyles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setCategoryModalVisible(false)}
+        >
+          <View style={localStyles.modalContentCenter}>
+            <Text style={localStyles.modalTitle}>Seleccionar Categoría</Text>
+            <FlatList
+              data={CATEGORIAS}
+              keyExtractor={(item) => item}
+              style={{ maxHeight: 350 }}
+              renderItem={({ item: cat }) => (
+                <TouchableOpacity
+                  style={localStyles.modalOption}
+                  onPress={() => {
+                    setCategoria(cat);
+                    setCategoryModalVisible(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      localStyles.modalOptionText,
+                      categoria === cat && {
+                        color: COLORS.primary,
+                        fontWeight: "bold",
+                      },
+                    ]}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
 
 const localStyles = StyleSheet.create({
-  typeContainer: { flexDirection: "row", marginBottom: SPACING.lg },
-  typeButton: {
-    flex: 1,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    alignItems: "center",
-  },
-  typeButtonActive: { backgroundColor: COLORS.primary },
-  typeText: { color: COLORS.primary, fontWeight: "bold" },
-  typeTextActive: { color: COLORS.surface },
-  textArea: { height: 100, textAlignVertical: "top" },
-  categoryGrid: {
+  selectorInput: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+    borderRadius: 8,
+  },
+  textArea: {
+    height: 120,
+    textAlignVertical: "top",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SPACING.xl,
+  },
+  modalContentCenter: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 15,
+    width: "100%",
+    padding: SPACING.lg,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: COLORS.text,
     marginBottom: SPACING.md,
+    textAlign: "center",
   },
-  categoryChip: {
-    backgroundColor: "#eee",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
+  modalOption: {
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.background,
   },
-  categoryChipActive: { backgroundColor: COLORS.primary },
-  categoryChipText: { color: COLORS.textMuted, fontSize: 13 },
-  categoryChipTextActive: { color: COLORS.surface, fontWeight: "bold" },
+  modalOptionText: {
+    fontSize: 16,
+    color: COLORS.text,
+    textAlign: "center",
+  },
 });

@@ -9,7 +9,6 @@ import { auth } from "../services/firebaseConfig";
 
 import LoginScreen from "../screens/LoginScreen";
 import HomeScreen from "../screens/HomeScreen";
-import CreateListingScreen from "../screens/CreateListingScreen";
 import ListingDetailScreen from "../screens/ListingDetailScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import MyListingsScreen from "../screens/MyListingsScreen";
@@ -24,7 +23,6 @@ function MainTabs() {
   return (
     <Tab.Navigator screenOptions={{ tabBarActiveTintColor: "#5A0028" }}>
       <Tab.Screen name="Inicio" component={HomeScreen} />
-      <Tab.Screen name="Publicar" component={CreateListingScreen} />
       <Tab.Screen name="Mi Perfil" component={ProfileScreen} />
     </Tab.Navigator>
   );
