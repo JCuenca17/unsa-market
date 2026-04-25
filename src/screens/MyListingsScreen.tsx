@@ -12,6 +12,7 @@ import {
   Modal,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+// IMPORTANTE: Hemos añadido arrayRemove a la importación
 import {
   collection,
   query,
@@ -22,6 +23,7 @@ import {
   getDoc,
   addDoc,
   deleteDoc,
+  arrayRemove,
 } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../services/firebaseConfig";
@@ -118,6 +120,7 @@ export default function MyListingsScreen({ navigation }: any) {
 
   const confirmSale = async (compradorId: string) => {
     try {
+      // 1. Generamos el recibo para el comprador
       await addDoc(collection(db, "transactions"), {
         listing_id: selectedListing.id,
         vendedor_id: selectedListing.vendedor_id,
@@ -129,19 +132,27 @@ export default function MyListingsScreen({ navigation }: any) {
         calificado: false,
       });
 
-      // Lógica de Inteligencia: Si era un artículo único, cerrarlo.
+      // 2. Lógica de limpieza: Borramos al comprador de la lista
+      const updateData: any = {
+        interesados: arrayRemove(compradorId),
+      };
+
+      // Si es artículo único, también lo agotamos
       if (selectedListing.modalidad === "unica") {
-        await updateDoc(doc(db, "listings", selectedListing.id), {
-          estado: "agotado",
-        });
+        updateData.estado = "agotado";
+      }
+
+      await updateDoc(doc(db, "listings", selectedListing.id), updateData);
+
+      if (selectedListing.modalidad === "unica") {
         Alert.alert(
           "Venta completada",
-          "Se generó el recibo y tu publicación ha finalizado (pasó a Agotados).",
+          "Se generó el recibo y tu publicación finalizó.",
         );
       } else {
         Alert.alert(
           "Venta registrada",
-          "Se generó el recibo. Al ser una oferta múltiple, tu publicación sigue activa.",
+          "Se generó el recibo. El comprador fue retirado de tu lista hasta que vuelva a contactarte.",
         );
       }
 
