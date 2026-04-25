@@ -1,5 +1,5 @@
 // src/screens/HomeScreen.tsx
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,11 +9,23 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
+  TextInput,
+  ScrollView,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { Ionicons } from "@expo/vector-icons";
 import { db } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
+
+const CATEGORIAS = [
+  "Todos",
+  "Libros",
+  "Tecnología",
+  "Alimentos",
+  "Tutorías",
+  "Otros",
+];
 
 interface Listing {
   id: string;
@@ -29,6 +41,10 @@ export default function HomeScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Estados para búsqueda y filtrado
+  const [searchText, setSearchText] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Todos");
+
   const fetchListings = async () => {
     try {
       const q = query(
@@ -36,11 +52,14 @@ export default function HomeScreen({ navigation }: any) {
         where("estado", "==", "activo"),
         orderBy("fecha_creacion", "desc"),
       );
+
       const querySnapshot = await getDocs(q);
       const fetchedListings: Listing[] = [];
-      querySnapshot.forEach((doc) =>
-        fetchedListings.push({ id: doc.id, ...doc.data() } as Listing),
-      );
+
+      querySnapshot.forEach((doc) => {
+        fetchedListings.push({ id: doc.id, ...doc.data() } as Listing);
+      });
+
       setListings(fetchedListings);
     } catch (error) {
       console.error("Error al descargar catálogo:", error);
@@ -55,16 +74,30 @@ export default function HomeScreen({ navigation }: any) {
       fetchListings();
     }, []),
   );
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchListings();
   };
+
+  // Lógica de filtrado en tiempo real
+  const filteredListings = useMemo(() => {
+    return listings.filter((item) => {
+      const matchesSearch = item.titulo
+        .toLowerCase()
+        .includes(searchText.toLowerCase());
+      const matchesCategory =
+        selectedCategory === "Todos" || item.categoria === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [listings, searchText, selectedCategory]);
 
   const renderItem = ({ item }: { item: Listing }) => {
     const defaultImage =
       item.tipo === "producto"
         ? "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80"
         : "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&q=80";
+
     const coverImage =
       item.imagenes && item.imagenes.length > 0
         ? item.imagenes[0]
@@ -90,21 +123,76 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <View style={globalStyles.container}>
+      {/* Cabecera con Búsqueda */}
+      <View style={localStyles.headerContainer}>
+        <View style={localStyles.searchBar}>
+          <Ionicons
+            name="search"
+            size={20}
+            color={COLORS.textLight}
+            style={{ marginRight: 10 }}
+          />
+          <TextInput
+            style={localStyles.searchInput}
+            placeholder="Buscar en UNSA Market..."
+            value={searchText}
+            onChangeText={setSearchText}
+          />
+          {searchText !== "" && (
+            <TouchableOpacity onPress={() => setSearchText("")}>
+              <Ionicons
+                name="close-circle"
+                size={20}
+                color={COLORS.textLight}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Chips de Categorías */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={localStyles.categoriesScroll}
+        >
+          {CATEGORIAS.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={[
+                localStyles.categoryChip,
+                selectedCategory === cat && localStyles.categoryChipActive,
+              ]}
+              onPress={() => setSelectedCategory(cat)}
+            >
+              <Text
+                style={[
+                  localStyles.categoryChipText,
+                  selectedCategory === cat &&
+                    localStyles.categoryChipTextActive,
+                ]}
+              >
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       {loading ? (
         <View style={globalStyles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       ) : (
         <FlatList
-          data={listings}
+          data={filteredListings}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           numColumns={2}
           columnWrapperStyle={localStyles.row}
-          contentContainerStyle={{ padding: SPACING.sm }}
+          contentContainerStyle={localStyles.listContainer}
           ListEmptyComponent={
             <Text style={globalStyles.emptyText}>
-              No hay anuncios disponibles en este momento.
+              No se encontraron resultados para tu búsqueda.
             </Text>
           }
           refreshControl={
@@ -121,33 +209,100 @@ export default function HomeScreen({ navigation }: any) {
 }
 
 const localStyles = StyleSheet.create({
-  row: { justifyContent: "space-between" },
+  headerContainer: {
+    backgroundColor: COLORS.surface,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    marginHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    height: 45,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.text,
+  },
+  categoriesScroll: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.background,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  categoryChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  categoryChipText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  categoryChipTextActive: {
+    color: COLORS.surface,
+    fontWeight: "bold",
+  },
+  listContainer: {
+    padding: SPACING.sm,
+  },
+  row: {
+    justifyContent: "space-between",
+  },
   card: {
     flex: 1,
     backgroundColor: COLORS.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: SPACING.md,
     marginHorizontal: 5,
     overflow: "hidden",
-    elevation: 2,
+    elevation: 3,
     shadowColor: "#000",
     shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowRadius: 5,
     maxWidth: "48%",
   },
-  cardImage: { width: "100%", height: 140, backgroundColor: COLORS.border },
-  cardContent: { padding: SPACING.sm },
+  cardImage: {
+    width: "100%",
+    height: 140,
+    backgroundColor: COLORS.border,
+  },
+  cardContent: {
+    padding: SPACING.sm,
+  },
   price: {
     fontSize: 18,
     color: COLORS.text,
     fontWeight: "bold",
     marginBottom: 4,
   },
-  title: { fontSize: 13, color: COLORS.textMuted, marginBottom: 6, height: 35 },
+  title: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginBottom: 6,
+    height: 35,
+  },
   category: {
     color: COLORS.textLight,
     fontSize: 11,
-    fontWeight: "500",
+    fontWeight: "600",
     textTransform: "uppercase",
   },
 });
