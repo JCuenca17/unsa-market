@@ -86,6 +86,34 @@ export default function ListingDetailScreen({ route, navigation }: any) {
     }
   };
 
+  // LÓGICA DE ESTRELLAS PROFESIONALES
+  const renderStars = (rating: number, size: number = 14) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      if (rating >= i) {
+        // Estrella completa
+        stars.push(
+          <Ionicons key={i} name="star" size={size} color="#FFD700" />,
+        );
+      } else if (rating >= i - 0.5) {
+        // Media estrella
+        stars.push(
+          <Ionicons key={i} name="star-half" size={size} color="#FFD700" />,
+        );
+      } else {
+        // Estrella vacía
+        stars.push(
+          <Ionicons key={i} name="star-outline" size={size} color="#FFD700" />,
+        );
+      }
+    }
+    return (
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        {stars}
+      </View>
+    );
+  };
+
   if (loading)
     return (
       <View
@@ -160,9 +188,10 @@ export default function ListingDetailScreen({ route, navigation }: any) {
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.sellerName}>{vendedor?.nombre}</Text>
             <View style={styles.statsContainer}>
-              <Ionicons name="star" size={14} color="#FFD700" />
+              {/* Aquí se integra la lógica de estrellas para el rating promedio */}
+              {renderStars(vendedor?.rating_promedio || 0, 14)}
               <Text style={styles.sellerStats}>
-                {" "}
+                {"  "}
                 {vendedor?.rating_promedio?.toFixed(1) || "Nuevo"} •{" "}
                 {vendedor?.total_ventas || 0} ventas
               </Text>
@@ -184,9 +213,8 @@ export default function ListingDetailScreen({ route, navigation }: any) {
             <View key={index} style={styles.reviewCard}>
               <View style={styles.reviewHeader}>
                 <View style={styles.starsRow}>
-                  {Array.from({ length: r.rating }).map((_, i) => (
-                    <Ionicons key={i} name="star" size={14} color="#FFD700" />
-                  ))}
+                  {/* Aquí se integra la lógica de estrellas para las reseñas individuales */}
+                  {renderStars(r.rating, 14)}
                 </View>
                 <Text style={styles.reviewDate}>
                   {new Date(r.fecha).toLocaleDateString()}

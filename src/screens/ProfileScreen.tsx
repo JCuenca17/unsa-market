@@ -3,177 +3,221 @@ import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
-  Image,
+  StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  StyleSheet,
   ScrollView,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { doc, getDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { Ionicons } from "@expo/vector-icons";
-import { db, auth } from "../services/firebaseConfig";
+import { auth, db } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
 export default function ProfileScreen({ navigation }: any) {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchUserData = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      const docRef = doc(db, "users", user.uid);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setUserData(docSnap.data());
+      }
+    } catch (error) {
+      console.log("Error al cargar perfil", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
-      const fetchUserData = async () => {
-        try {
-          const docSnap = await getDoc(doc(db, "users", auth.currentUser!.uid));
-          if (docSnap.exists()) setUserData(docSnap.data());
-        } catch (e) {
-          console.log(e);
-        } finally {
-          setLoading(false);
-        }
-      };
       fetchUserData();
     }, []),
   );
 
-  if (loading)
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.log("Error al cerrar sesión", error);
+    }
+  };
+
+  // LÓGICA DE ESTRELLAS PROFESIONALES
+  const renderStars = (rating: number) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      if (rating >= i) {
+        // Estrella completa
+        stars.push(<Ionicons key={i} name="star" size={20} color="#FFD700" />);
+      } else if (rating >= i - 0.5) {
+        // Media estrella
+        stars.push(
+          <Ionicons key={i} name="star-half" size={20} color="#FFD700" />,
+        );
+      } else {
+        // Estrella vacía
+        stars.push(
+          <Ionicons key={i} name="star-outline" size={20} color="#FFD700" />,
+        );
+      }
+    }
+    return <View style={localStyles.starsContainer}>{stars}</View>;
+  };
+
+  if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator color={COLORS.primary} />
+      <View style={globalStyles.center}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
+  }
+
+  const rating = userData?.rating_promedio || 0;
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        {/* BOTÓN DE EDICIÓN FLOTANTE SOBRE LA FOTO */}
-        <View style={styles.avatarWrapper}>
-          {userData?.photoURL ? (
-            <Image source={{ uri: userData.photoURL }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Ionicons name="person" size={50} color={COLORS.textLight} />
-            </View>
-          )}
-          <TouchableOpacity
-            style={styles.editIconBadge}
-            onPress={() => navigation.navigate("EditProfile")}
-          >
-            <Ionicons name="pencil" size={16} color="#fff" />
-          </TouchableOpacity>
+    <ScrollView contentContainerStyle={globalStyles.containerPadding}>
+      <View style={localStyles.profileHeader}>
+        <View style={localStyles.avatarPlaceholder}>
+          <Ionicons name="person" size={50} color="#fff" />
         </View>
-
-        <Text style={styles.name}>{userData?.nombre}</Text>
-        <Text style={styles.faculty}>{userData?.facultad}</Text>
+        <Text style={localStyles.name}>{userData?.nombre || "Estudiante"}</Text>
+        <Text style={localStyles.email}>{userData?.email}</Text>
+        <Text style={localStyles.facultad}>
+          {userData?.facultad || "Facultad no registrada"}
+        </Text>
       </View>
 
-      <View style={styles.statsBar}>
-        <View style={styles.statBox}>
-          <Text style={styles.statVal}>
-            {userData?.rating_promedio?.toFixed(1) || "0.0"}
+      <View style={localStyles.statsCard}>
+        <View style={localStyles.statItem}>
+          <Text style={localStyles.statLabel}>Reputación</Text>
+          {renderStars(rating)}
+          <Text style={localStyles.statNumber}>{rating.toFixed(1)} / 5.0</Text>
+        </View>
+        <View style={localStyles.divider} />
+        <View style={localStyles.statItem}>
+          <Text style={localStyles.statLabel}>Ventas</Text>
+          <Ionicons
+            name="cart-outline"
+            size={24}
+            color={COLORS.primary}
+            style={{ marginVertical: 3 }}
+          />
+          <Text style={localStyles.statNumber}>
+            {userData?.total_ventas || 0} completadas
           </Text>
-          <Text style={styles.statLabel}>Reputación</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statVal}>{userData?.total_ventas || 0}</Text>
-          <Text style={styles.statLabel}>Ventas</Text>
         </View>
       </View>
 
-      <View style={styles.menu}>
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => navigation.navigate("MisAnuncios")}
-        >
-          <Ionicons name="pricetags-outline" size={22} color={COLORS.primary} />
-          <Text style={styles.menuText}>Gestionar mis publicaciones</Text>
-          <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
-        </TouchableOpacity>
+      <TouchableOpacity
+        style={localStyles.menuItem}
+        onPress={() => navigation.navigate("EditProfile", { userData })}
+      >
+        <Ionicons name="create-outline" size={24} color={COLORS.text} />
+        <Text style={localStyles.menuText}>Editar Perfil</Text>
+        <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
+      </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => navigation.navigate("MisCompras")}
-        >
-          <Ionicons name="receipt-outline" size={22} color={COLORS.primary} />
-          <Text style={styles.menuText}>Historial de compras</Text>
-          <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
-        </TouchableOpacity>
+      <TouchableOpacity
+        style={localStyles.menuItem}
+        onPress={() => navigation.navigate("MisAnuncios")}
+      >
+        <Ionicons name="pricetags-outline" size={24} color={COLORS.text} />
+        <Text style={localStyles.menuText}>Mis Publicaciones</Text>
+        <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
+      </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.menuItem, { marginTop: 30 }]}
-          onPress={() => signOut(auth)}
-        >
-          <Ionicons name="log-out-outline" size={22} color={COLORS.danger} />
-          <Text style={[styles.menuText, { color: COLORS.danger }]}>
-            Cerrar Sesión
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={[
+          localStyles.menuItem,
+          { borderColor: "transparent", marginTop: 20 },
+        ]}
+        onPress={handleLogout}
+      >
+        <Ionicons name="log-out-outline" size={24} color={COLORS.danger} />
+        <Text style={[localStyles.menuText, { color: COLORS.danger }]}>
+          Cerrar Sesión
+        </Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  header: {
+const localStyles = StyleSheet.create({
+  profileHeader: {
     alignItems: "center",
-    paddingVertical: 40,
-    backgroundColor: "#fcfcfc",
-  },
-  avatarWrapper: { position: "relative" },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 3,
-    borderColor: COLORS.primary,
+    marginBottom: SPACING.xl,
+    marginTop: SPACING.md,
   },
   avatarPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "#eee",
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: SPACING.md,
   },
-  editIconBadge: {
-    position: "absolute",
-    bottom: 5,
-    right: 5,
-    backgroundColor: COLORS.primary,
-    padding: 8,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: "#fff",
+  name: { fontSize: 24, fontWeight: "bold", color: COLORS.text },
+  email: { fontSize: 14, color: COLORS.textMuted, marginTop: 4 },
+  facultad: {
+    fontSize: 14,
+    color: COLORS.secondary,
+    marginTop: 4,
+    fontWeight: "600",
   },
-  name: { fontSize: 24, fontWeight: "bold", color: COLORS.text, marginTop: 15 },
-  faculty: { fontSize: 14, color: COLORS.textMuted, marginTop: 4 },
-  statsBar: {
+  statsCard: {
     flexDirection: "row",
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: "#f0f0f0",
-    paddingVertical: 20,
+    backgroundColor: COLORS.surface,
+    borderRadius: 15,
+    padding: SPACING.lg,
+    marginBottom: SPACING.xl,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
-  statBox: {
-    flex: 1,
-    alignItems: "center",
-    borderRightWidth: 1,
-    borderColor: "#f0f0f0",
+  statItem: { flex: 1, alignItems: "center" },
+  divider: {
+    width: 1,
+    backgroundColor: COLORS.border,
+    marginHorizontal: SPACING.md,
   },
-  statVal: { fontSize: 20, fontWeight: "bold", color: COLORS.text },
   statLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textLight,
+    fontWeight: "600",
     textTransform: "uppercase",
+    marginBottom: 5,
   },
-  menu: { padding: 20 },
+  starsContainer: { flexDirection: "row", marginVertical: 5 },
+  statNumber: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.text,
+    marginTop: 5,
+  },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f9f9f9",
+    backgroundColor: COLORS.surface,
+    padding: SPACING.lg,
+    borderRadius: 12,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  menuText: { flex: 1, marginLeft: 15, fontSize: 16, color: COLORS.text },
+  menuText: {
+    flex: 1,
+    marginLeft: SPACING.md,
+    fontSize: 16,
+    color: COLORS.text,
+    fontWeight: "500",
+  },
 });

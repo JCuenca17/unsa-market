@@ -3,11 +3,11 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  Image,
-  FlatList,
-  ActivityIndicator,
   StyleSheet,
+  ActivityIndicator,
+  FlatList,
   TouchableOpacity,
+  Image,
 } from "react-native";
 import {
   doc,
@@ -19,7 +19,7 @@ import {
 } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { db } from "../services/firebaseConfig";
-import { COLORS, SPACING } from "../theme/theme";
+import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
 export default function PublicProfileScreen({ route, navigation }: any) {
   const { vendedorId } = route.params;
@@ -28,188 +28,244 @@ export default function PublicProfileScreen({ route, navigation }: any) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchPublicData = async () => {
       try {
         // 1. Obtener datos del vendedor
-        const vDoc = await getDoc(doc(db, "users", vendedorId));
-        if (vDoc.exists()) {
-          setVendedor(vDoc.data());
+        const vSnap = await getDoc(doc(db, "users", vendedorId));
+        if (vSnap.exists()) {
+          setVendedor(vSnap.data());
         }
 
-        // 2. Obtener sus publicaciones activas
+        // 2. Obtener anuncios activos del vendedor
         const q = query(
           collection(db, "listings"),
           where("vendedor_id", "==", vendedorId),
+          where("estado", "==", "activo"),
         );
         const lSnap = await getDocs(q);
-        setListings(lSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      } catch (e) {
-        console.error("Error al cargar perfil público:", e);
+        const fetchedListings: any[] = [];
+        lSnap.forEach((d) => fetchedListings.push({ id: d.id, ...d.data() }));
+        setListings(fetchedListings);
+      } catch (error) {
+        console.log("Error cargando perfil público", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
+
+    fetchPublicData();
   }, [vendedorId]);
+
+  // LÓGICA DE ESTRELLAS PROFESIONALES
+  const renderStars = (rating: number) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      if (rating >= i) {
+        // Estrella completa
+        stars.push(<Ionicons key={i} name="star" size={20} color="#FFD700" />);
+      } else if (rating >= i - 0.5) {
+        // Media estrella
+        stars.push(
+          <Ionicons key={i} name="star-half" size={20} color="#FFD700" />,
+        );
+      } else {
+        // Estrella vacía
+        stars.push(
+          <Ionicons key={i} name="star-outline" size={20} color="#FFD700" />,
+        );
+      }
+    }
+    return <View style={localStyles.starsContainer}>{stars}</View>;
+  };
+
+  const renderItem = ({ item }: any) => {
+    const defaultImage =
+      item.tipo === "producto"
+        ? "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80"
+        : "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&q=80";
+    const coverImage =
+      item.imagenes && item.imagenes.length > 0
+        ? item.imagenes[0]
+        : defaultImage;
+
+    return (
+      <TouchableOpacity
+        style={localStyles.card}
+        onPress={() => navigation.navigate("ListingDetail", { item })}
+        activeOpacity={0.9}
+      >
+        <Image source={{ uri: coverImage }} style={localStyles.cardImage} />
+        <View style={localStyles.cardContent}>
+          <Text style={localStyles.price}>S/ {item.precio.toFixed(2)}</Text>
+          <Text style={localStyles.title} numberOfLines={2}>
+            {item.titulo}
+          </Text>
+          <Text style={localStyles.category}>{item.categoria}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <View style={globalStyles.center}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
-  return (
-    <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      {/* CABECERA DEL PERFIL */}
-      <View style={styles.header}>
-        <Image
-          source={{
-            uri: vendedor?.photoURL || "https://via.placeholder.com/150",
-          }}
-          style={styles.avatar}
-        />
-        <Text style={styles.name}>{vendedor?.nombre || "Estudiante UNSA"}</Text>
-        <Text style={styles.sub}>{vendedor?.facultad}</Text>
-        <View style={styles.stats}>
-          <Text style={styles.statText}>
-            ⭐ {vendedor?.rating_promedio?.toFixed(1) || "Nuevo"}
-          </Text>
-          <Text style={{ marginHorizontal: 15, color: COLORS.textLight }}>
-            |
-          </Text>
-          <Text style={styles.statText}>
-            {vendedor?.total_ventas || 0} Ventas
-          </Text>
-        </View>
-      </View>
+  const rating = vendedor?.rating_promedio || 0;
 
-      {/* LISTA DE PUBLICACIONES DEL VENDEDOR */}
-      <Text style={styles.listTitle}>Publicaciones Activas</Text>
+  return (
+    <View style={globalStyles.container}>
       <FlatList
         data={listings}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.listingItem}
-            // Navegación al detalle del anuncio pasando el objeto completo
-            onPress={() => navigation.navigate("ListingDetail", { item })}
-          >
-            {/* Imagen en miniatura */}
-            {item.imagenes && item.imagenes.length > 0 ? (
-              <Image
-                source={{ uri: item.imagenes[0] }}
-                style={styles.listingImage}
-              />
-            ) : (
-              <View style={styles.placeholderImage}>
-                <Ionicons name="image-outline" size={24} color="#ccc" />
+        numColumns={2}
+        columnWrapperStyle={localStyles.row}
+        contentContainerStyle={localStyles.listContainer}
+        ListHeaderComponent={
+          <View style={localStyles.headerWrapper}>
+            <View style={localStyles.profileHeader}>
+              <View style={localStyles.avatarPlaceholder}>
+                <Ionicons name="person" size={50} color="#fff" />
               </View>
-            )}
-
-            {/* Detalles del anuncio */}
-            <View style={styles.listingInfo}>
-              <Text style={styles.listingTitle}>{item.titulo}</Text>
-              <Text style={styles.listingPrice}>S/ {item.precio}</Text>
+              <Text style={localStyles.name}>
+                {vendedor?.nombre || "Estudiante"}
+              </Text>
+              <Text style={localStyles.facultad}>
+                {vendedor?.facultad || "Facultad no registrada"}
+              </Text>
             </View>
 
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={COLORS.textLight}
-            />
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={() => (
-          <Text style={styles.emptyText}>
-            Este estudiante no tiene publicaciones activas.
+            <View style={localStyles.statsCard}>
+              <View style={localStyles.statItem}>
+                <Text style={localStyles.statLabel}>Reputación</Text>
+                {renderStars(rating)}
+                <Text style={localStyles.statNumber}>
+                  {rating.toFixed(1)} / 5.0
+                </Text>
+              </View>
+              <View style={localStyles.divider} />
+              <View style={localStyles.statItem}>
+                <Text style={localStyles.statLabel}>Ventas</Text>
+                <Ionicons
+                  name="cart-outline"
+                  size={24}
+                  color={COLORS.primary}
+                  style={{ marginVertical: 3 }}
+                />
+                <Text style={localStyles.statNumber}>
+                  {vendedor?.total_ventas || 0} completadas
+                </Text>
+              </View>
+            </View>
+
+            <Text style={localStyles.sectionTitle}>
+              Anuncios de {vendedor?.nombre}
+            </Text>
+          </View>
+        }
+        ListEmptyComponent={
+          <Text style={globalStyles.emptyText}>
+            Este estudiante no tiene anuncios activos en este momento.
           </Text>
-        )}
+        }
+        renderItem={renderItem}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
+const localStyles = StyleSheet.create({
+  headerWrapper: { padding: SPACING.md },
+  profileHeader: {
     alignItems: "center",
-    padding: 30,
-    backgroundColor: "#f9f9f9",
-    borderBottomWidth: 1,
-    borderColor: "#eee",
+    marginBottom: SPACING.xl,
+    marginTop: SPACING.sm,
   },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 10,
-    backgroundColor: "#eee",
-  },
-  name: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: COLORS.text,
-  },
-  sub: {
-    color: COLORS.primary,
-    fontWeight: "600",
-    marginTop: 4,
-  },
-  stats: {
-    flexDirection: "row",
-    marginTop: 10,
-    alignItems: "center",
-  },
-  statText: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    fontWeight: "500",
-  },
-  listTitle: {
-    padding: 15,
-    fontWeight: "bold",
-    fontSize: 18,
-    color: COLORS.text,
-  },
-  listingItem: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderColor: "#eee",
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  listingImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 8,
-    marginRight: 15,
-  },
-  placeholderImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 8,
-    backgroundColor: "#eee",
-    marginRight: 15,
+  avatarPlaceholder: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: SPACING.md,
   },
-  listingInfo: {
-    flex: 1,
-  },
-  listingTitle: {
-    fontWeight: "bold",
-    fontSize: 16,
-    color: COLORS.text,
-  },
-  listingPrice: {
-    color: COLORS.primary,
-    fontWeight: "600",
+  name: { fontSize: 24, fontWeight: "bold", color: COLORS.text },
+  facultad: {
+    fontSize: 14,
+    color: COLORS.secondary,
     marginTop: 4,
+    fontWeight: "600",
   },
-  emptyText: {
-    textAlign: "center",
+  statsCard: {
+    flexDirection: "row",
+    backgroundColor: COLORS.surface,
+    borderRadius: 15,
+    padding: SPACING.lg,
+    marginBottom: SPACING.xl,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  statItem: { flex: 1, alignItems: "center" },
+  divider: {
+    width: 1,
+    backgroundColor: COLORS.border,
+    marginHorizontal: SPACING.md,
+  },
+  statLabel: {
+    fontSize: 13,
     color: COLORS.textLight,
-    marginTop: 20,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    marginBottom: 5,
+  },
+  starsContainer: { flexDirection: "row", marginVertical: 5 },
+  statNumber: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.text,
+    marginTop: 5,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+    marginLeft: 5,
+  },
+  listContainer: { paddingBottom: 100 },
+  row: { justifyContent: "space-between", paddingHorizontal: SPACING.sm },
+  card: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    marginBottom: SPACING.md,
+    marginHorizontal: 5,
+    overflow: "hidden",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    maxWidth: "48%",
+  },
+  cardImage: { width: "100%", height: 140, backgroundColor: COLORS.border },
+  cardContent: { padding: SPACING.sm },
+  price: {
+    fontSize: 18,
+    color: COLORS.text,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  title: { fontSize: 13, color: COLORS.textMuted, marginBottom: 6, height: 35 },
+  category: {
+    color: COLORS.textLight,
+    fontSize: 11,
+    fontWeight: "600",
+    textTransform: "uppercase",
   },
 });
