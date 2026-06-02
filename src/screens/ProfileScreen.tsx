@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Image, // <-- 1. Importamos Image de react-native
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { doc, getDoc } from "firebase/firestore";
@@ -84,9 +85,18 @@ export default function ProfileScreen({ navigation }: any) {
   return (
     <ScrollView contentContainerStyle={globalStyles.containerPadding}>
       <View style={localStyles.profileHeader}>
-        <View style={localStyles.avatarPlaceholder}>
-          <Ionicons name="person" size={50} color="#fff" />
-        </View>
+        {/* 2. Verificamos si existe photoURL para mostrar la imagen o el icono por defecto */}
+        {userData?.photoURL ? (
+          <Image
+            source={{ uri: userData.photoURL }}
+            style={localStyles.avatarImage}
+          />
+        ) : (
+          <View style={localStyles.avatarPlaceholder}>
+            <Ionicons name="person" size={50} color="#fff" />
+          </View>
+        )}
+
         <Text style={localStyles.name}>{userData?.nombre || "Estudiante"}</Text>
         <Text style={localStyles.email}>{userData?.email}</Text>
         <Text style={localStyles.facultad}>
@@ -154,6 +164,13 @@ const localStyles = StyleSheet.create({
     alignItems: "center",
     marginBottom: SPACING.xl,
     marginTop: SPACING.md,
+  },
+  // 3. Estilo nuevo para la imagen cuando se carga exitosamente
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: SPACING.md,
   },
   avatarPlaceholder: {
     width: 100,
