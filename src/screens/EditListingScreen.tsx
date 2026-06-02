@@ -21,13 +21,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { db } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
-const CATEGORIAS = [
+const CATEGORIAS_PRODUCTO = [
   "Libros",
   "Tecnología",
   "Alimentos",
-  "Tutorías",
+  "Ropa",
   "Inmuebles",
-  "Servicios",
+  "Otros",
+];
+const CATEGORIAS_SERVICIO = [
+  "Tutorías",
+  "Asesorías",
+  "Mantenimiento",
+  "Trámites",
   "Otros",
 ];
 const TIPOS = ["Producto", "Servicio"];
@@ -62,6 +68,15 @@ export default function EditListingScreen({ route, navigation }: any) {
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [typeModalVisible, setTypeModalVisible] = useState(false);
   const [modalidadModalVisible, setModalidadModalVisible] = useState(false);
+
+  const currentCategories =
+    tipo === "Producto" ? CATEGORIAS_PRODUCTO : CATEGORIAS_SERVICIO;
+
+  const handleTypeChange = (newType: string) => {
+    setTipo(newType);
+    setCategoria("");
+    setTypeModalVisible(false);
+  };
 
   const pickImage = async () => {
     if (imagenesBase64.length >= 5) {
@@ -232,7 +247,6 @@ export default function EditListingScreen({ route, navigation }: any) {
           )}
         </TouchableOpacity>
 
-        {/* Modales */}
         <Modal
           visible={typeModalVisible}
           transparent={true}
@@ -249,10 +263,7 @@ export default function EditListingScreen({ route, navigation }: any) {
                 <TouchableOpacity
                   key={t}
                   style={localStyles.modalOption}
-                  onPress={() => {
-                    setTipo(t);
-                    setTypeModalVisible(false);
-                  }}
+                  onPress={() => handleTypeChange(t)}
                 >
                   <Text style={localStyles.modalOptionText}>{t}</Text>
                 </TouchableOpacity>
@@ -274,7 +285,7 @@ export default function EditListingScreen({ route, navigation }: any) {
             <View style={localStyles.modalContentCenter}>
               <Text style={localStyles.modalTitle}>Seleccionar Categoría</Text>
               <FlatList
-                data={CATEGORIAS}
+                data={currentCategories}
                 keyExtractor={(item) => item}
                 style={{ maxHeight: 300 }}
                 renderItem={({ item }) => (

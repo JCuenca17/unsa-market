@@ -18,14 +18,20 @@ import { Ionicons } from "@expo/vector-icons";
 import { db } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
-const CATEGORIAS = [
-  "Todos",
+// Listas separadas y limpias
+const CATEGORIAS_PRODUCTO = [
   "Libros",
   "Tecnología",
   "Alimentos",
-  "Tutorías",
+  "Ropa",
   "Inmuebles",
-  "Servicios",
+  "Otros",
+];
+const CATEGORIAS_SERVICIO = [
+  "Tutorías",
+  "Asesorías",
+  "Mantenimiento",
+  "Trámites",
   "Otros",
 ];
 
@@ -43,10 +49,18 @@ export default function HomeScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("Todos");
 
-  // Estado para el panel de filtros
+  const [activeTab, setActiveTab] = useState<"producto" | "servicio">(
+    "producto",
+  );
+  const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+
+  // Categorías dinámicas según la pestaña activa
+  const currentCategories = [
+    "Todos",
+    ...(activeTab === "producto" ? CATEGORIAS_PRODUCTO : CATEGORIAS_SERVICIO),
+  ];
 
   const fetchListings = async () => {
     try {
@@ -80,6 +94,11 @@ export default function HomeScreen({ navigation }: any) {
     fetchListings();
   };
 
+  const handleTabChange = (tab: "producto" | "servicio") => {
+    setActiveTab(tab);
+    setSelectedCategory("Todos"); // Reiniciamos el filtro al cambiar de pestaña
+  };
+
   const filteredListings = useMemo(() => {
     return listings.filter((item) => {
       const matchesSearch = item.titulo
@@ -87,9 +106,10 @@ export default function HomeScreen({ navigation }: any) {
         .includes(searchText.toLowerCase());
       const matchesCategory =
         selectedCategory === "Todos" || item.categoria === selectedCategory;
-      return matchesSearch && matchesCategory;
+      const matchesTab = item.tipo === activeTab;
+      return matchesSearch && matchesCategory && matchesTab;
     });
-  }, [listings, searchText, selectedCategory]);
+  }, [listings, searchText, selectedCategory, activeTab]);
 
   const renderItem = ({ item }: { item: Listing }) => {
     const defaultImage =
@@ -121,7 +141,6 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <View style={globalStyles.container}>
-      {/* Cabecera compacta y profesional */}
       <View style={localStyles.headerContainer}>
         <View style={localStyles.searchRow}>
           <View style={localStyles.searchBar}>
@@ -133,7 +152,7 @@ export default function HomeScreen({ navigation }: any) {
             />
             <TextInput
               style={localStyles.searchInput}
-              placeholder="Buscar anuncios..."
+              placeholder="Buscar..."
               value={searchText}
               onChangeText={setSearchText}
             />
@@ -147,7 +166,6 @@ export default function HomeScreen({ navigation }: any) {
               </TouchableOpacity>
             )}
           </View>
-          {/* Botón para abrir el panel de filtros */}
           <TouchableOpacity
             style={localStyles.filterButton}
             onPress={() => setFilterModalVisible(true)}
@@ -155,6 +173,42 @@ export default function HomeScreen({ navigation }: any) {
             <Ionicons name="options-outline" size={24} color={COLORS.surface} />
           </TouchableOpacity>
         </View>
+
+        <View style={localStyles.segmentedControl}>
+          <TouchableOpacity
+            style={[
+              localStyles.segmentButton,
+              activeTab === "producto" && localStyles.segmentButtonActive,
+            ]}
+            onPress={() => handleTabChange("producto")}
+          >
+            <Text
+              style={[
+                localStyles.segmentText,
+                activeTab === "producto" && localStyles.segmentTextActive,
+              ]}
+            >
+              Productos
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              localStyles.segmentButton,
+              activeTab === "servicio" && localStyles.segmentButtonActive,
+            ]}
+            onPress={() => handleTabChange("servicio")}
+          >
+            <Text
+              style={[
+                localStyles.segmentText,
+                activeTab === "servicio" && localStyles.segmentTextActive,
+              ]}
+            >
+              Servicios
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {selectedCategory !== "Todos" && (
           <View style={localStyles.activeFilterRow}>
             <Text style={localStyles.activeFilterText}>
@@ -194,7 +248,6 @@ export default function HomeScreen({ navigation }: any) {
         />
       )}
 
-      {/* Floating Action Button (FAB) para publicar */}
       <TouchableOpacity
         style={localStyles.fab}
         onPress={() => navigation.navigate("Publicar")}
@@ -202,7 +255,6 @@ export default function HomeScreen({ navigation }: any) {
         <Ionicons name="add" size={32} color={COLORS.surface} />
       </TouchableOpacity>
 
-      {/* Modal de Filtros (Bottom Sheet Nativos) */}
       <Modal
         visible={filterModalVisible}
         animationType="slide"
@@ -218,7 +270,7 @@ export default function HomeScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
             <FlatList
-              data={CATEGORIAS}
+              data={currentCategories}
               keyExtractor={(item) => item}
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -262,7 +314,7 @@ const localStyles = StyleSheet.create({
   headerContainer: {
     backgroundColor: COLORS.surface,
     paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
+    paddingBottom: SPACING.md,
     elevation: 2,
     shadowColor: "#000",
     shadowOpacity: 0.1,
@@ -273,7 +325,6 @@ const localStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.xs,
   },
   searchBar: {
     flex: 1,
@@ -296,6 +347,30 @@ const localStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  segmentedControl: {
+    flexDirection: "row",
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+    marginHorizontal: SPACING.lg,
+    marginTop: 12,
+    padding: 4,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderRadius: 6,
+  },
+  segmentButtonActive: {
+    backgroundColor: "#fff",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  segmentText: { fontSize: 14, fontWeight: "600", color: COLORS.textMuted },
+  segmentTextActive: { color: COLORS.text },
   activeFilterRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -305,7 +380,7 @@ const localStyles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 15,
     marginLeft: SPACING.lg,
-    marginTop: SPACING.xs,
+    marginTop: 10,
   },
   activeFilterText: {
     color: COLORS.primary,
@@ -313,7 +388,7 @@ const localStyles = StyleSheet.create({
     fontWeight: "600",
     marginRight: 4,
   },
-  listContainer: { padding: SPACING.sm, paddingBottom: 100 }, // Espacio para que el FAB no tape contenido
+  listContainer: { padding: SPACING.sm, paddingBottom: 100 },
   row: { justifyContent: "space-between" },
   card: {
     flex: 1,
@@ -343,8 +418,6 @@ const localStyles = StyleSheet.create({
     fontWeight: "600",
     textTransform: "uppercase",
   },
-
-  // Estilos del Botón Flotante
   fab: {
     position: "absolute",
     bottom: SPACING.xl,
@@ -361,8 +434,6 @@ const localStyles = StyleSheet.create({
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
   },
-
-  // Estilos del Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
