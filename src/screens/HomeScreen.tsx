@@ -13,7 +13,14 @@ import {
   Modal,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+} from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { db } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
@@ -41,7 +48,12 @@ interface Listing {
   precio: number;
   tipo: string;
   categoria: string;
+  vendedor_id: string;
+  fecha_creacion: string;
   imagenes?: string[];
+  // Campos calculados para ordenar el TOP
+  vendedor_rating?: number;
+  vendedor_ventas?: number;
 }
 
 export default function HomeScreen({ navigation }: any) {
@@ -64,17 +76,69 @@ export default function HomeScreen({ navigation }: any) {
 
   const fetchListings = async () => {
     try {
+      // 1. Obtenemos solo los anuncios activos (quitamos el orderBy de Firebase para ordenarlo nosotros en memoria)
       const q = query(
         collection(db, "listings"),
         where("estado", "==", "activo"),
-        orderBy("fecha_creacion", "desc"),
       );
       const querySnapshot = await getDocs(q);
-      const fetchedListings: Listing[] = [];
-      querySnapshot.forEach((doc) =>
-        fetchedListings.push({ id: doc.id, ...doc.data() } as Listing),
+
+      const rawListings: Listing[] = [];
+      querySnapshot.forEach((d) =>
+        rawListings.push({ id: d.id, ...d.data() } as Listing),
       );
-      setListings(fetchedListings);
+
+      // 2. Extraemos los IDs únicos de los vendedores para no hacer consultas duplicadas
+      const uniqueSellerIds = [
+        ...new Set(rawListings.map((item) => item.vendedor_id)),
+      ];
+      const sellersCache: Record<string, { rating: number; ventas: number }> =
+        {};
+
+      // 3. Descargamos las estadísticas de los vendedores en paralelo (más rápido)
+      await Promise.all(
+        uniqueSellerIds.map(async (uid) => {
+          if (uid) {
+            const userDoc = await getDoc(doc(db, "users", uid));
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              sellersCache[uid] = {
+                rating: userData.rating_promedio || 0,
+                ventas: userData.total_ventas || 0,
+              };
+            }
+          }
+        }),
+      );
+
+      // 4. Adjuntamos las estadísticas a cada anuncio
+      const completeListings = rawListings.map((item) => ({
+        ...item,
+        vendedor_rating: sellersCache[item.vendedor_id]?.rating || 0,
+        vendedor_ventas: sellersCache[item.vendedor_id]?.ventas || 0,
+      }));
+
+      // 5. ORDENAMIENTO TOP (Rating -> Ventas -> Fecha más reciente)
+      completeListings.sort((a, b) => {
+        // Primero por rating de mayor a menor
+        if (b.vendedor_rating !== a.vendedor_rating) {
+          return (b.vendedor_rating || 0) - (a.vendedor_rating || 0);
+        }
+        // Si tienen el mismo rating, el que tenga más ventas totales
+        if (b.vendedor_ventas !== a.vendedor_ventas) {
+          return (b.vendedor_ventas || 0) - (a.vendedor_ventas || 0);
+        }
+        // Si empatan en todo (ej. usuarios nuevos), mostramos el más reciente
+        const dateA = a.fecha_creacion
+          ? new Date(a.fecha_creacion).getTime()
+          : 0;
+        const dateB = b.fecha_creacion
+          ? new Date(b.fecha_creacion).getTime()
+          : 0;
+        return dateB - dateA;
+      });
+
+      setListings(completeListings);
     } catch (error) {
       console.error("Error al descargar catálogo:", error);
     } finally {
@@ -121,13 +185,27 @@ export default function HomeScreen({ navigation }: any) {
         ? item.imagenes[0]
         : defaultImage;
 
+    // Lógica para determinar si es un anuncio "TOP" (Mínimo 4.0 estrellas y al menos 1 venta)
+    const isTop =
+      (item.vendedor_rating || 0) >= 4.0 && (item.vendedor_ventas || 0) >= 1;
+
     return (
       <TouchableOpacity
         style={localStyles.card}
         onPress={() => navigation.navigate("ListingDetail", { item })}
         activeOpacity={0.9}
       >
-        <Image source={{ uri: coverImage }} style={localStyles.cardImage} />
+        <View style={localStyles.imageContainer}>
+          <Image source={{ uri: coverImage }} style={localStyles.cardImage} />
+          {/* Etiqueta TOP visual */}
+          {isTop && (
+            <View style={localStyles.topBadge}>
+              <Ionicons name="star" size={10} color="#fff" />
+              <Text style={localStyles.topBadgeText}>TOP</Text>
+            </View>
+          )}
+        </View>
+
         <View style={localStyles.cardContent}>
           <Text style={localStyles.price}>S/ {item.precio.toFixed(2)}</Text>
           <Text style={localStyles.title} numberOfLines={2}>
@@ -403,7 +481,32 @@ const localStyles = StyleSheet.create({
     shadowRadius: 3,
     maxWidth: "48%",
   },
+  imageContainer: {
+    position: "relative",
+  },
   cardImage: { width: "100%", height: 140, backgroundColor: COLORS.border },
+  topBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "#FFD700",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  topBadgeText: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#4a3c00", // Texto oscuro para contrastar con el amarillo oro
+    marginLeft: 3,
+  },
   cardContent: { padding: SPACING.sm },
   price: {
     fontSize: 18,
