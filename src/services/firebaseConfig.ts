@@ -1,8 +1,9 @@
 // src/services/firebaseConfig.ts
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { initializeAuth, getReactNativePersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Deberás reemplazar estos valores con los de tu proyecto de Firebase
 const firebaseConfig = {
@@ -17,6 +18,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Exportar las instancias para usarlas en otras partes de la app
-export const auth = getAuth(app);
+// @ts-ignore
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage),
+});
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
