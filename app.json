@@ -3,7 +3,7 @@
     "name": "unsa-market",
     "slug": "unsa-market",
     "scheme": "unsamarket",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -19,6 +19,7 @@
     },
     "android": {
       "package": "com.unsa.market",
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
