@@ -78,10 +78,18 @@ export default function ListingDetailScreen({ route, navigation }: any) {
       }
       const cleanNumber = vendedor.whatsapp.replace(/\D/g, "");
       const message = `Hola ${vendedor.nombre}, vi tu anuncio "${item.titulo}" en UNSA Market y me interesa.`;
-      const url = `https://wa.me/51${cleanNumber}?text=${encodeURIComponent(message)}`;
-      const supported = await Linking.canOpenURL(url);
-      if (supported) await Linking.openURL(url);
+      
+      const whatsappUrl = `whatsapp://send?phone=51${cleanNumber}&text=${encodeURIComponent(message)}`;
+      const webUrl = `https://wa.me/51${cleanNumber}?text=${encodeURIComponent(message)}`;
+
+      try {
+        await Linking.openURL(whatsappUrl);
+      } catch (err) {
+        // Fallback to web link if WhatsApp deep link is not supported or not installed
+        await Linking.openURL(webUrl);
+      }
     } catch (e) {
+      console.log("Error al abrir WhatsApp:", e);
       Alert.alert("Error", "No se pudo abrir WhatsApp.");
     }
   };
