@@ -15,7 +15,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc } from "firebase/firestore";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../services/firebaseConfig";
@@ -39,6 +39,12 @@ const CATEGORIAS_SERVICIO = [
 const TIPOS = ["Producto", "Servicio"];
 const MODALIDADES = ["Única vez (Un solo artículo)", "Múltiples / Continuo"];
 
+// Creamos una interfaz para manejar la foto en pantalla y su texto Base64
+interface ImagenUpload {
+  uri: string;
+  base64: string;
+}
+
 export default function CreateListingScreen({ navigation }: any) {
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -47,25 +53,25 @@ export default function CreateListingScreen({ navigation }: any) {
   const [categoria, setCategoria] = useState("");
   const [modalidad, setModalidad] = useState("Única vez (Un solo artículo)");
 
-  const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
+  // Usamos nuestro nuevo formato de imágenes
+  const [imagenes, setImagenes] = useState<ImagenUpload[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [typeModalVisible, setTypeModalVisible] = useState(false);
   const [modalidadModalVisible, setModalidadModalVisible] = useState(false);
 
-  // Determinar categorías según el tipo seleccionado
   const currentCategories =
     tipo === "Producto" ? CATEGORIAS_PRODUCTO : CATEGORIAS_SERVICIO;
 
   const handleTypeChange = (newType: string) => {
     setTipo(newType);
-    setCategoria(""); // Si cambia de Producto a Servicio, borramos la categoría actual
+    setCategoria("");
     setTypeModalVisible(false);
   };
 
   const pickImage = async () => {
-    if (imagenesBase64.length >= 5) {
+    if (imagenes.length >= 5) {
       Alert.alert("Límite alcanzado", "Puedes subir un máximo de 5 fotos.");
       return;
     }
@@ -73,22 +79,55 @@ export default function CreateListingScreen({ navigation }: any) {
       mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.2,
-      base64: true,
+      quality: 0.5,
+      base64: true, // Importante: ImgBB necesita el Base64
     });
 
-    if (!result.canceled && result.assets[0].base64) {
-      setImagenesBase64([
-        ...imagenesBase64,
-        `data:image/jpeg;base64,${result.assets[0].base64}`,
+    if (!result.canceled && result.assets[0].base64 && result.assets[0].uri) {
+      // Guardamos la uri (para mostrarla en pantalla) y el base64 (para mandarlo a ImgBB)
+      setImagenes([
+        ...imagenes,
+        {
+          uri: result.assets[0].uri,
+          base64: result.assets[0].base64,
+        },
       ]);
     }
   };
 
   const removeImage = (indexToRemove: number) => {
-    const newImages = [...imagenesBase64];
+    const newImages = [...imagenes];
     newImages.splice(indexToRemove, 1);
-    setImagenesBase64(newImages);
+    setImagenes(newImages);
+  };
+
+  // --- LA MAGIA DE IMGBB: Esta función sube las fotos y nos devuelve las URLs ---
+  const uploadImagesToImgBB = async () => {
+    const urls: string[] = [];
+    // Aquí está la API KEY que me proporcionaste
+    const IMGBB_API_KEY = "c57febdcd7411b93464a7f8bae43714e";
+
+    for (const img of imagenes) {
+      const formData = new FormData();
+      formData.append("image", img.base64); // ImgBB recibe el texto base64 directo
+
+      const response = await fetch(
+        `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+
+      const json = await response.json();
+      if (json.success) {
+        // Extraemos el link cortito de la foto que nos da ImgBB
+        urls.push(json.data.url);
+      } else {
+        throw new Error("No se pudo subir la imagen a ImgBB");
+      }
+    }
+    return urls;
   };
 
   const handlePublish = async () => {
@@ -96,7 +135,7 @@ export default function CreateListingScreen({ navigation }: any) {
       !titulo.trim() ||
       !precio.trim() ||
       !categoria ||
-      imagenesBase64.length === 0
+      imagenes.length === 0
     ) {
       Alert.alert(
         "Campos incompletos",
@@ -110,6 +149,15 @@ export default function CreateListingScreen({ navigation }: any) {
 
     setLoading(true);
     try {
+      // 1. SUBIMOS LAS FOTOS A IMGBB PRIMERO
+      const urlsDescarga = await uploadImagesToImgBB();
+
+      // 2. OBTENEMOS DATOS DEL USUARIO (Mantenemos la solución N+1)
+      const userDocRef = doc(db, "users", currentUser.uid);
+      const userDoc = await getDoc(userDocRef);
+      const userData = userDoc.exists() ? userDoc.data() : null;
+
+      // 3. GUARDAMOS EN TU BASE DE DATOS DE FIREBASE
       const listingData = {
         vendedor_id: currentUser.uid,
         titulo: titulo.trim(),
@@ -119,17 +167,20 @@ export default function CreateListingScreen({ navigation }: any) {
         categoria: categoria.trim(),
         modalidad: modalidad.includes("Única") ? "unica" : "multiple",
         estado: "activo",
-        imagenes: imagenesBase64,
+        imagenes: urlsDescarga, // <-- GUARDAMOS SOLO LOS LINKS DE IMGBB
         fecha_creacion: new Date().toISOString(),
+        vendedor_rating: userData?.rating_promedio || 0,
+        vendedor_ventas: userData?.total_ventas || 0,
       };
 
       await addDoc(collection(db, "listings"), listingData);
       Alert.alert("¡Éxito!", "Tu anuncio ha sido publicado en la plataforma.");
       navigation.goBack();
     } catch (error: any) {
+      console.error(error);
       Alert.alert(
         "Error",
-        "No se pudo publicar el anuncio. Revisa tu conexión a internet.",
+        "Tuvimos un problema subiendo las imágenes. Revisa tu conexión a internet e inténtalo de nuevo.",
       );
     } finally {
       setLoading(false);
@@ -166,9 +217,7 @@ export default function CreateListingScreen({ navigation }: any) {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={globalStyles.label}>
-          Fotos ({imagenesBase64.length}/5) *
-        </Text>
+        <Text style={globalStyles.label}>Fotos ({imagenes.length}/5) *</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -181,9 +230,9 @@ export default function CreateListingScreen({ navigation }: any) {
               color={COLORS.textLight}
             />
           </TouchableOpacity>
-          {imagenesBase64.map((uri, index) => (
+          {imagenes.map((img, index) => (
             <View key={index} style={localStyles.imageWrapper}>
-              <Image source={{ uri }} style={localStyles.thumbnail} />
+              <Image source={{ uri: img.uri }} style={localStyles.thumbnail} />
               <TouchableOpacity
                 style={localStyles.removeBadge}
                 onPress={() => removeImage(index)}

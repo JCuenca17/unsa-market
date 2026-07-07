@@ -11,18 +11,11 @@ import {
   RefreshControl,
   TextInput,
   Modal,
-  Alert, // <-- IMPORTACIÓN AÑADIDA
+  Alert,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  getDoc,
-} from "firebase/firestore";
-import { signOut } from "firebase/auth"; // <-- IMPORTACIÓN AÑADIDA
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { signOut } from "firebase/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
@@ -78,6 +71,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const fetchListings = async () => {
     try {
+      // SOLUCIÓN N+1: 1 sola consulta simple para traer todos los anuncios
       const q = query(
         collection(db, "listings"),
         where("estado", "==", "activo"),
@@ -89,34 +83,8 @@ export default function HomeScreen({ navigation }: any) {
         rawListings.push({ id: d.id, ...d.data() } as Listing),
       );
 
-      const uniqueSellerIds = [
-        ...new Set(rawListings.map((item) => item.vendedor_id)),
-      ];
-      const sellersCache: Record<string, { rating: number; ventas: number }> =
-        {};
-
-      await Promise.all(
-        uniqueSellerIds.map(async (uid) => {
-          if (uid) {
-            const userDoc = await getDoc(doc(db, "users", uid));
-            if (userDoc.exists()) {
-              const userData = userDoc.data();
-              sellersCache[uid] = {
-                rating: userData.rating_promedio || 0,
-                ventas: userData.total_ventas || 0,
-              };
-            }
-          }
-        }),
-      );
-
-      const completeListings = rawListings.map((item) => ({
-        ...item,
-        vendedor_rating: sellersCache[item.vendedor_id]?.rating || 0,
-        vendedor_ventas: sellersCache[item.vendedor_id]?.ventas || 0,
-      }));
-
-      completeListings.sort((a, b) => {
+      // SOLUCIÓN N+1: Ordenamos utilizando directamente los datos que ya vienen dentro del anuncio
+      rawListings.sort((a, b) => {
         if (b.vendedor_rating !== a.vendedor_rating) {
           return (b.vendedor_rating || 0) - (a.vendedor_rating || 0);
         }
@@ -132,7 +100,7 @@ export default function HomeScreen({ navigation }: any) {
         return dateB - dateA;
       });
 
-      setListings(completeListings);
+      setListings(rawListings);
     } catch (error) {
       console.error("Error al descargar catálogo:", error);
     } finally {
@@ -243,7 +211,7 @@ export default function HomeScreen({ navigation }: any) {
             <Ionicons name="options-outline" size={24} color={COLORS.surface} />
           </TouchableOpacity>
 
-          {/* <-- BOTÓN PARA SALIR DEL MODO INVITADO --> */}
+          {/* BOTÓN PARA SALIR DEL MODO INVITADO */}
           {isGuest && (
             <TouchableOpacity
               style={[
@@ -331,7 +299,7 @@ export default function HomeScreen({ navigation }: any) {
         />
       )}
 
-      {/* <-- BLOQUEO DEL BOTÓN FLOTANTE PARA INVITADOS --> */}
+      {/* BLOQUEO DEL BOTÓN FLOTANTE PARA INVITADOS */}
       <TouchableOpacity
         style={localStyles.fab}
         onPress={() => {
