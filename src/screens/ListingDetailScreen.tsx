@@ -64,6 +64,16 @@ export default function ListingDetailScreen({ route, navigation }: any) {
   }, [item]);
 
   const handleWhatsApp = async () => {
+    // <-- RESTRICCIÓN PARA INVITADOS -->
+    if (currentUser?.isAnonymous) {
+      Alert.alert(
+        "Únete a UNSA Market",
+        "Para contactar al vendedor y realizar la compra, debes crear una cuenta con tu correo universitario.",
+        [{ text: "Entendido" }],
+      );
+      return;
+    }
+
     if (isOwner) return;
     if (!vendedor?.whatsapp) {
       Alert.alert("Error", "El vendedor no registró su WhatsApp.");
@@ -86,22 +96,18 @@ export default function ListingDetailScreen({ route, navigation }: any) {
     }
   };
 
-  // LÓGICA DE ESTRELLAS PROFESIONALES
   const renderStars = (rating: number, size: number = 14) => {
     const stars = [];
     for (let i = 1; i <= 5; i++) {
       if (rating >= i) {
-        // Estrella completa
         stars.push(
           <Ionicons key={i} name="star" size={size} color="#FFD700" />,
         );
       } else if (rating >= i - 0.5) {
-        // Media estrella
         stars.push(
           <Ionicons key={i} name="star-half" size={size} color="#FFD700" />,
         );
       } else {
-        // Estrella vacía
         stars.push(
           <Ionicons key={i} name="star-outline" size={size} color="#FFD700" />,
         );
@@ -188,7 +194,6 @@ export default function ListingDetailScreen({ route, navigation }: any) {
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.sellerName}>{vendedor?.nombre}</Text>
             <View style={styles.statsContainer}>
-              {/* Aquí se integra la lógica de estrellas para el rating promedio */}
               {renderStars(vendedor?.rating_promedio || 0, 14)}
               <Text style={styles.sellerStats}>
                 {"  "}
@@ -212,10 +217,7 @@ export default function ListingDetailScreen({ route, navigation }: any) {
           reviews.map((r, index) => (
             <View key={index} style={styles.reviewCard}>
               <View style={styles.reviewHeader}>
-                <View style={styles.starsRow}>
-                  {/* Aquí se integra la lógica de estrellas para las reseñas individuales */}
-                  {renderStars(r.rating, 14)}
-                </View>
+                <View style={styles.starsRow}>{renderStars(r.rating, 14)}</View>
                 <Text style={styles.reviewDate}>
                   {new Date(r.fecha).toLocaleDateString()}
                 </Text>

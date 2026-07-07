@@ -31,6 +31,9 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function MainTabs() {
+  // Verificamos si el usuario actual es un invitado
+  const isGuest = auth.currentUser?.isAnonymous;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -48,7 +51,8 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Inicio" component={HomeScreen} />
-      <Tab.Screen name="Mi Perfil" component={ProfileScreen} />
+      {/* Ocultamos la pestaña Mi Perfil si es invitado */}
+      {!isGuest && <Tab.Screen name="Mi Perfil" component={ProfileScreen} />}
     </Tab.Navigator>
   );
 }
@@ -64,18 +68,24 @@ export default function AppNavigator() {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // ACTIVACIÓN DE NOTIFICACIONES: Pedimos permiso y guardamos el token
-        registerForPushNotificationsAsync(currentUser.uid);
+        // Lógica diferencial para invitados
+        if (currentUser.isAnonymous) {
+          // El invitado no tiene documento en Firestore, lo dejamos pasar directo
+          setLoading(false);
+        } else {
+          // Usuario normal: Pedimos permiso y verificamos si completó su perfil
+          registerForPushNotificationsAsync(currentUser.uid);
 
-        unsubscribeDoc = onSnapshot(
-          doc(db, "users", currentUser.uid),
-          (docSnap) => {
-            setIsProfileComplete(
-              docSnap.exists() && docSnap.data().perfil_completado === true,
-            );
-            setLoading(false);
-          },
-        );
+          unsubscribeDoc = onSnapshot(
+            doc(db, "users", currentUser.uid),
+            (docSnap) => {
+              setIsProfileComplete(
+                docSnap.exists() && docSnap.data().perfil_completado === true,
+              );
+              setLoading(false);
+            },
+          );
+        }
       } else {
         if (unsubscribeDoc) unsubscribeDoc();
         setLoading(false);
@@ -101,7 +111,7 @@ export default function AppNavigator() {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Login" component={LoginScreen} />
         </Stack.Navigator>
-      ) : !isProfileComplete ? (
+      ) : !user.isAnonymous && !isProfileComplete ? (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen
             name="CompleteProfile"

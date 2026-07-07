@@ -11,6 +11,7 @@ import {
   RefreshControl,
   TextInput,
   Modal,
+  Alert, // <-- IMPORTACIÓN AÑADIDA
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import {
@@ -21,11 +22,11 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
+import { signOut } from "firebase/auth"; // <-- IMPORTACIÓN AÑADIDA
 import { Ionicons } from "@expo/vector-icons";
-import { db } from "../services/firebaseConfig";
+import { db, auth } from "../services/firebaseConfig";
 import { globalStyles, COLORS, SPACING } from "../theme/theme";
 
-// Listas separadas y limpias
 const CATEGORIAS_PRODUCTO = [
   "Libros",
   "Tecnología",
@@ -51,7 +52,6 @@ interface Listing {
   vendedor_id: string;
   fecha_creacion: string;
   imagenes?: string[];
-  // Campos calculados para ordenar el TOP
   vendedor_rating?: number;
   vendedor_ventas?: number;
 }
@@ -68,15 +68,16 @@ export default function HomeScreen({ navigation }: any) {
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [filterModalVisible, setFilterModalVisible] = useState(false);
 
-  // Categorías dinámicas según la pestaña activa
   const currentCategories = [
     "Todos",
     ...(activeTab === "producto" ? CATEGORIAS_PRODUCTO : CATEGORIAS_SERVICIO),
   ];
 
+  // Identificamos si es invitado para la UI
+  const isGuest = auth.currentUser?.isAnonymous;
+
   const fetchListings = async () => {
     try {
-      // 1. Obtenemos solo los anuncios activos (quitamos el orderBy de Firebase para ordenarlo nosotros en memoria)
       const q = query(
         collection(db, "listings"),
         where("estado", "==", "activo"),
@@ -88,14 +89,12 @@ export default function HomeScreen({ navigation }: any) {
         rawListings.push({ id: d.id, ...d.data() } as Listing),
       );
 
-      // 2. Extraemos los IDs únicos de los vendedores para no hacer consultas duplicadas
       const uniqueSellerIds = [
         ...new Set(rawListings.map((item) => item.vendedor_id)),
       ];
       const sellersCache: Record<string, { rating: number; ventas: number }> =
         {};
 
-      // 3. Descargamos las estadísticas de los vendedores en paralelo (más rápido)
       await Promise.all(
         uniqueSellerIds.map(async (uid) => {
           if (uid) {
@@ -111,24 +110,19 @@ export default function HomeScreen({ navigation }: any) {
         }),
       );
 
-      // 4. Adjuntamos las estadísticas a cada anuncio
       const completeListings = rawListings.map((item) => ({
         ...item,
         vendedor_rating: sellersCache[item.vendedor_id]?.rating || 0,
         vendedor_ventas: sellersCache[item.vendedor_id]?.ventas || 0,
       }));
 
-      // 5. ORDENAMIENTO TOP (Rating -> Ventas -> Fecha más reciente)
       completeListings.sort((a, b) => {
-        // Primero por rating de mayor a menor
         if (b.vendedor_rating !== a.vendedor_rating) {
           return (b.vendedor_rating || 0) - (a.vendedor_rating || 0);
         }
-        // Si tienen el mismo rating, el que tenga más ventas totales
         if (b.vendedor_ventas !== a.vendedor_ventas) {
           return (b.vendedor_ventas || 0) - (a.vendedor_ventas || 0);
         }
-        // Si empatan en todo (ej. usuarios nuevos), mostramos el más reciente
         const dateA = a.fecha_creacion
           ? new Date(a.fecha_creacion).getTime()
           : 0;
@@ -160,7 +154,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const handleTabChange = (tab: "producto" | "servicio") => {
     setActiveTab(tab);
-    setSelectedCategory("Todos"); // Reiniciamos el filtro al cambiar de pestaña
+    setSelectedCategory("Todos");
   };
 
   const filteredListings = useMemo(() => {
@@ -185,7 +179,6 @@ export default function HomeScreen({ navigation }: any) {
         ? item.imagenes[0]
         : defaultImage;
 
-    // Lógica para determinar si es un anuncio "TOP" (Mínimo 4.0 estrellas y al menos 1 venta)
     const isTop =
       (item.vendedor_rating || 0) >= 4.0 && (item.vendedor_ventas || 0) >= 1;
 
@@ -197,7 +190,6 @@ export default function HomeScreen({ navigation }: any) {
       >
         <View style={localStyles.imageContainer}>
           <Image source={{ uri: coverImage }} style={localStyles.cardImage} />
-          {/* Etiqueta TOP visual */}
           {isTop && (
             <View style={localStyles.topBadge}>
               <Ionicons name="star" size={10} color="#fff" />
@@ -250,6 +242,19 @@ export default function HomeScreen({ navigation }: any) {
           >
             <Ionicons name="options-outline" size={24} color={COLORS.surface} />
           </TouchableOpacity>
+
+          {/* <-- BOTÓN PARA SALIR DEL MODO INVITADO --> */}
+          {isGuest && (
+            <TouchableOpacity
+              style={[
+                localStyles.filterButton,
+                { backgroundColor: COLORS.danger, marginLeft: 8 },
+              ]}
+              onPress={() => signOut(auth)}
+            >
+              <Ionicons name="exit-outline" size={24} color={COLORS.surface} />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={localStyles.segmentedControl}>
@@ -326,9 +331,20 @@ export default function HomeScreen({ navigation }: any) {
         />
       )}
 
+      {/* <-- BLOQUEO DEL BOTÓN FLOTANTE PARA INVITADOS --> */}
       <TouchableOpacity
         style={localStyles.fab}
-        onPress={() => navigation.navigate("Publicar")}
+        onPress={() => {
+          if (isGuest) {
+            Alert.alert(
+              "Función Restringida",
+              "Para publicar un anuncio, debes registrarte con tu correo universitario @unsa.edu.pe",
+              [{ text: "Entendido" }],
+            );
+          } else {
+            navigation.navigate("Publicar");
+          }
+        }}
       >
         <Ionicons name="add" size={32} color={COLORS.surface} />
       </TouchableOpacity>
@@ -504,7 +520,7 @@ const localStyles = StyleSheet.create({
   topBadgeText: {
     fontSize: 10,
     fontWeight: "900",
-    color: "#4a3c00", // Texto oscuro para contrastar con el amarillo oro
+    color: "#4a3c00",
     marginLeft: 3,
   },
   cardContent: { padding: SPACING.sm },
