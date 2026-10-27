@@ -37,3 +37,5 @@ src/
   services/                     Firebase y notificaciones
   theme/theme.ts                colores y estilos compartidos
 ```
+
+© 2026 José Luis Cuenca Gutiérrez. Todos los derechos reservados. Las partes hechas por el resto del equipo pertenecen a sus autores.
